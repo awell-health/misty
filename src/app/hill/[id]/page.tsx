@@ -7,6 +7,7 @@ import { usePresence } from '@/lib/usePresence';
 import HillDescription from '@/components/HillDescription/HillDescription';
 import ScopePanel from '@/components/ScopePanel/ScopePanel';
 import HillChart from '@/components/HillChart/HillChart';
+import HillTimeline from '@/components/HillTimeline/HillTimeline';
 import PotOfGold from '@/components/PotOfGold/PotOfGold';
 
 type HillMode = 'current' | 'goal';
@@ -31,6 +32,12 @@ export default function HillPage() {
     toggleScopeHidden,
     toggleScopeCompleted,
     reorderScopes,
+    addTimelineProject,
+    deleteTimelineProject,
+    updateTimelineProjectName,
+    updateTimelineProjectDate,
+    commitTimelineProjectDate,
+    toggleTimelineMode,
   } = useHills();
 
   const hill = getHill(id);
@@ -136,6 +143,36 @@ export default function HillPage() {
     [id, syncGoalsFromCurrent]
   );
 
+  const handleAddTimelineProject = useCallback(
+    () => addTimelineProject(id),
+    [id, addTimelineProject]
+  );
+
+  const handleDeleteTimelineProject = useCallback(
+    (projectId: string) => deleteTimelineProject(id, projectId),
+    [id, deleteTimelineProject]
+  );
+
+  const handleUpdateTimelineProjectName = useCallback(
+    (projectId: string, name: string) => updateTimelineProjectName(id, projectId, name),
+    [id, updateTimelineProjectName]
+  );
+
+  const handleUpdateTimelineProjectDate = useCallback(
+    (projectId: string, date: number) => updateTimelineProjectDate(id, projectId, date),
+    [id, updateTimelineProjectDate]
+  );
+
+  const handleCommitTimelineProjectDate = useCallback(
+    (projectId: string, oldDate: number, newDate: number) => commitTimelineProjectDate(id, projectId, oldDate, newDate),
+    [id, commitTimelineProjectDate]
+  );
+
+  const handleToggleTimelineMode = useCallback(
+    () => toggleTimelineMode(id),
+    [id, toggleTimelineMode]
+  );
+
   // In goal mode, show goalPosition (falling back to position if no goal set)
   const chartScopes = useMemo(() => {
     if (!hill) return [];
@@ -197,37 +234,49 @@ export default function HillPage() {
         />
       </div>
       <div className="rightPanel">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex bg-bg-muted rounded-md p-0.5 border border-border-muted">
-            <button
-              className={`px-3 py-1 text-xs font-medium rounded-sm border-none cursor-pointer transition-colors ${mode === 'current' ? 'bg-bg-default text-fg-default shadow-sm' : 'bg-transparent text-fg-muted hover:text-fg-default'}`}
-              onClick={() => setMode('current')}
-            >
-              Current
-            </button>
-            <button
-              className={`px-3 py-1 text-xs font-medium rounded-sm border-none cursor-pointer transition-colors ${mode === 'goal' ? 'bg-bg-default text-fg-accent shadow-sm' : 'bg-transparent text-fg-muted hover:text-fg-default'}`}
-              onClick={() => setMode('goal')}
-            >
-              Goal
-            </button>
-          </div>
-          {mode === 'goal' && (
-            <button
-              className="px-2 py-1 text-xs text-fg-muted border border-border-muted rounded-md bg-bg-default cursor-pointer hover:text-fg-default hover:border-fg-accent"
-              onClick={handleSyncGoals}
-              title="Copy current positions into goal positions"
-            >
-              Sync from current
-            </button>
-          )}
-        </div>
-        <HillChart
-          scopes={chartScopes}
-          onUpdatePosition={handleUpdatePosition}
-          onCommitPosition={handleCommitPosition}
-          originPositions={originPositions}
+        <HillTimeline
+          projects={hill.timelineProjects ?? []}
+          mode={hill.timelineMode ?? 'fixed-timeline'}
+          onAddProject={handleAddTimelineProject}
+          onDeleteProject={handleDeleteTimelineProject}
+          onUpdateProjectName={handleUpdateTimelineProjectName}
+          onUpdateProjectDate={handleUpdateTimelineProjectDate}
+          onCommitProjectDate={handleCommitTimelineProjectDate}
+          onToggleMode={handleToggleTimelineMode}
         />
+        <div className="relative">
+          <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+            <div className="flex bg-bg-muted rounded-md p-0.5 border border-border-muted">
+              <button
+                className={`px-3 py-1 text-xs font-medium rounded-sm border-none cursor-pointer transition-colors ${mode === 'current' ? 'bg-bg-default text-fg-default shadow-sm' : 'bg-transparent text-fg-muted hover:text-fg-default'}`}
+                onClick={() => setMode('current')}
+              >
+                Current
+              </button>
+              <button
+                className={`px-3 py-1 text-xs font-medium rounded-sm border-none cursor-pointer transition-colors ${mode === 'goal' ? 'bg-bg-default text-fg-accent shadow-sm' : 'bg-transparent text-fg-muted hover:text-fg-default'}`}
+                onClick={() => setMode('goal')}
+              >
+                Goal
+              </button>
+            </div>
+            {mode === 'goal' && (
+              <button
+                className="px-2 py-1 text-xs text-fg-muted border border-border-muted rounded-md bg-bg-default cursor-pointer hover:text-fg-default hover:border-fg-accent"
+                onClick={handleSyncGoals}
+                title="Copy current positions into goal positions"
+              >
+                Sync from current
+              </button>
+            )}
+          </div>
+          <HillChart
+            scopes={chartScopes}
+            onUpdatePosition={handleUpdatePosition}
+            onCommitPosition={handleCommitPosition}
+            originPositions={originPositions}
+          />
+        </div>
         <PotOfGold scopes={completedScopes} onToggleCompleted={handleToggleCompleted} />
       </div>
     </div>

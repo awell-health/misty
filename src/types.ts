@@ -11,12 +11,24 @@ export interface Scope {
   completedAt?: number;
 }
 
+export interface TimelineProject {
+  id: string;
+  name: string;
+  color: string;
+  date: number; // epoch ms — absolute calendar date for the goal
+  order: number;
+}
+
+export type TimelineMode = 'fixed-timeline' | 'fixed-scope';
+
 export interface Hill {
   id: string;
   title: string;
   description: string;
   scopes: Scope[];
   order: number;
+  timelineProjects?: TimelineProject[];
+  timelineMode?: TimelineMode;
 }
 
 export const SCOPE_COLORS = [

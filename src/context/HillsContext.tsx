@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { ref, onValue, set, update, remove, get } from 'firebase/database';
 import { getFirebaseDb, getDbPrefix } from '@/lib/firebase';
-import { Hill, Scope, SCOPE_COLORS } from '@/types';
+import { Hill, Scope, TimelineProject, TimelineMode, SCOPE_COLORS } from '@/types';
 
 type UndoAction = { undo: () => void; redo: () => void };
 
@@ -33,6 +33,12 @@ interface HillsContextValue {
   commitScopeGoalPosition: (hillId: string, scopeId: string, oldPosition: number, newPosition: number) => void;
   syncGoalsFromCurrent: (hillId: string) => void;
   reorderScopes: (hillId: string, fromIndex: number, toIndex: number) => void;
+  addTimelineProject: (hillId: string) => string;
+  deleteTimelineProject: (hillId: string, projectId: string) => void;
+  updateTimelineProjectName: (hillId: string, projectId: string, name: string) => void;
+  updateTimelineProjectDate: (hillId: string, projectId: string, date: number) => void;
+  commitTimelineProjectDate: (hillId: string, projectId: string, oldDate: number, newDate: number) => void;
+  toggleTimelineMode: (hillId: string) => void;
 }
 
 const HillsContext = createContext<HillsContextValue | null>(null);
@@ -55,12 +61,27 @@ function snapshotToHills(data: Record<string, any> | null): Hill[] {
         completedAt: s.completedAt ?? undefined,
       }))
       .sort((a, b) => a.order - b.order);
+    const timelineProjectsMap = val.timelineProjects || {};
+    const nowMs = Date.now();
+    const threeMonthsMs = 90 * 24 * 60 * 60 * 1000;
+    const timelineProjects: TimelineProject[] = Object.entries(timelineProjectsMap)
+      .map(([pid, p]: [string, any]) => ({
+        id: pid,
+        name: p.name || '',
+        color: p.color || SCOPE_COLORS[0],
+        // Migrate old timePosition (0-1 ratio) to absolute epoch ms if date not yet stored
+        date: p.date ?? Math.round(nowMs + (p.timePosition ?? 0.5) * threeMonthsMs),
+        order: p.order ?? 0,
+      }))
+      .sort((a, b) => a.order - b.order);
     return {
       id,
       title: val.title || '',
       description: val.description || '',
       scopes,
       order: val.order ?? 0,
+      timelineProjects,
+      timelineMode: val.timelineMode ?? 'fixed-timeline',
     };
   }).sort((a, b) => a.order - b.order);
 }
@@ -474,6 +495,78 @@ export function HillsProvider({ children }: { children: ReactNode }) {
     [hills, pushUndo]
   );
 
+  const addTimelineProject = useCallback((hillId: string) => {
+    const id = crypto.randomUUID();
+    const db = getFirebaseDb();
+    const hill = hills.find((h) => h.id === hillId);
+    const existingProjects = hill?.timelineProjects ?? [];
+    const maxOrder = existingProjects.reduce((max, p) => Math.max(max, p.order), -1);
+    const projectData = {
+      name: 'New goal',
+      color: SCOPE_COLORS[existingProjects.length % SCOPE_COLORS.length],
+      date: Math.round(Date.now() + 45 * 24 * 60 * 60 * 1000), // ~1.5 months from now
+      order: maxOrder + 1,
+    };
+    set(ref(db, dbPath(`hills/${hillId}/timelineProjects/${id}`)), projectData);
+    pushUndo({
+      undo: () => remove(ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${id}`))),
+      redo: () => set(ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${id}`)), projectData),
+    });
+    return id;
+  }, [hills, pushUndo]);
+
+  const deleteTimelineProject = useCallback((hillId: string, projectId: string) => {
+    const db = getFirebaseDb();
+    const projectRef = ref(db, dbPath(`hills/${hillId}/timelineProjects/${projectId}`));
+    get(projectRef).then((snapshot) => {
+      const data = snapshot.val();
+      remove(projectRef);
+      pushUndo({
+        undo: () => set(ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${projectId}`)), data),
+        redo: () => remove(ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${projectId}`))),
+      });
+    });
+  }, [pushUndo]);
+
+  const updateTimelineProjectName = useCallback((hillId: string, projectId: string, name: string) => {
+    const db = getFirebaseDb();
+    const projectRef = ref(db, dbPath(`hills/${hillId}/timelineProjects/${projectId}`));
+    get(projectRef).then((snapshot) => {
+      const oldName = snapshot.val()?.name ?? '';
+      update(projectRef, { name });
+      pushUndo({
+        undo: () => update(ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${projectId}`)), { name: oldName }),
+        redo: () => update(ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${projectId}`)), { name }),
+      });
+    });
+  }, [pushUndo]);
+
+  const updateTimelineProjectDate = useCallback((hillId: string, projectId: string, date: number) => {
+    const db = getFirebaseDb();
+    update(ref(db, dbPath(`hills/${hillId}/timelineProjects/${projectId}`)), { date });
+  }, []);
+
+  const commitTimelineProjectDate = useCallback((hillId: string, projectId: string, oldDate: number, newDate: number) => {
+    if (oldDate === newDate) return;
+    pushUndo({
+      undo: () => update(ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${projectId}`)), { date: oldDate }),
+      redo: () => update(ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${projectId}`)), { date: newDate }),
+    });
+  }, [pushUndo]);
+
+  const toggleTimelineMode = useCallback((hillId: string) => {
+    const hill = hills.find((h) => h.id === hillId);
+    if (!hill) return;
+    const oldMode = hill.timelineMode ?? 'fixed-timeline';
+    const newMode: TimelineMode = oldMode === 'fixed-timeline' ? 'fixed-scope' : 'fixed-timeline';
+    const db = getFirebaseDb();
+    update(ref(db, dbPath(`hills/${hillId}`)), { timelineMode: newMode });
+    pushUndo({
+      undo: () => update(ref(getFirebaseDb(), dbPath(`hills/${hillId}`)), { timelineMode: oldMode }),
+      redo: () => update(ref(getFirebaseDb(), dbPath(`hills/${hillId}`)), { timelineMode: newMode }),
+    });
+  }, [hills, pushUndo]);
+
   return (
     <HillsContext.Provider
       value={{
@@ -502,6 +595,12 @@ export function HillsProvider({ children }: { children: ReactNode }) {
         commitScopeGoalPosition,
         syncGoalsFromCurrent,
         reorderScopes,
+        addTimelineProject,
+        deleteTimelineProject,
+        updateTimelineProjectName,
+        updateTimelineProjectDate,
+        commitTimelineProjectDate,
+        toggleTimelineMode,
       }}
     >
       {children}
