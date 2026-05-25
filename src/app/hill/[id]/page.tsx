@@ -35,6 +35,7 @@ export default function HillPage() {
     addTimelineProject,
     deleteTimelineProject,
     updateTimelineProjectName,
+    updateTimelineProjectColor,
     updateTimelineProjectDate,
     commitTimelineProjectDate,
     toggleTimelineMode,
@@ -158,6 +159,11 @@ export default function HillPage() {
     [id, updateTimelineProjectName]
   );
 
+  const handleUpdateTimelineProjectColor = useCallback(
+    (projectId: string, color: string) => updateTimelineProjectColor(id, projectId, color),
+    [id, updateTimelineProjectColor]
+  );
+
   const handleUpdateTimelineProjectDate = useCallback(
     (projectId: string, date: number) => updateTimelineProjectDate(id, projectId, date),
     [id, updateTimelineProjectDate]
@@ -240,6 +246,7 @@ export default function HillPage() {
           onAddProject={handleAddTimelineProject}
           onDeleteProject={handleDeleteTimelineProject}
           onUpdateProjectName={handleUpdateTimelineProjectName}
+          onUpdateProjectColor={handleUpdateTimelineProjectColor}
           onUpdateProjectDate={handleUpdateTimelineProjectDate}
           onCommitProjectDate={handleCommitTimelineProjectDate}
           onToggleMode={handleToggleTimelineMode}

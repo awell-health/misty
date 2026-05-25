@@ -36,6 +36,7 @@ interface HillsContextValue {
   addTimelineProject: (hillId: string) => string;
   deleteTimelineProject: (hillId: string, projectId: string) => void;
   updateTimelineProjectName: (hillId: string, projectId: string, name: string) => void;
+  updateTimelineProjectColor: (hillId: string, projectId: string, color: string) => void;
   updateTimelineProjectDate: (hillId: string, projectId: string, date: number) => void;
   commitTimelineProjectDate: (hillId: string, projectId: string, oldDate: number, newDate: number) => void;
   toggleTimelineMode: (hillId: string) => void;
@@ -541,6 +542,19 @@ export function HillsProvider({ children }: { children: ReactNode }) {
     });
   }, [pushUndo]);
 
+  const updateTimelineProjectColor = useCallback((hillId: string, projectId: string, color: string) => {
+    const db = getFirebaseDb();
+    const projectRef = ref(db, dbPath(`hills/${hillId}/timelineProjects/${projectId}`));
+    get(projectRef).then((snapshot) => {
+      const oldColor = snapshot.val()?.color ?? SCOPE_COLORS[0];
+      update(projectRef, { color });
+      pushUndo({
+        undo: () => update(ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${projectId}`)), { color: oldColor }),
+        redo: () => update(ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${projectId}`)), { color }),
+      });
+    });
+  }, [pushUndo]);
+
   const updateTimelineProjectDate = useCallback((hillId: string, projectId: string, date: number) => {
     const db = getFirebaseDb();
     update(ref(db, dbPath(`hills/${hillId}/timelineProjects/${projectId}`)), { date });
@@ -598,6 +612,7 @@ export function HillsProvider({ children }: { children: ReactNode }) {
         addTimelineProject,
         deleteTimelineProject,
         updateTimelineProjectName,
+        updateTimelineProjectColor,
         updateTimelineProjectDate,
         commitTimelineProjectDate,
         toggleTimelineMode,

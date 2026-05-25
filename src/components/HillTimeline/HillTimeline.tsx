@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { TimelineProject, TimelineMode } from '@/types';
+import { TimelineProject, TimelineMode, SCOPE_COLORS } from '@/types';
 
 interface HillTimelineProps {
   projects: TimelineProject[];
@@ -9,6 +9,7 @@ interface HillTimelineProps {
   onAddProject: () => string;
   onDeleteProject: (id: string) => void;
   onUpdateProjectName: (id: string, name: string) => void;
+  onUpdateProjectColor: (id: string, color: string) => void;
   onUpdateProjectDate: (id: string, date: number) => void;
   onCommitProjectDate: (id: string, oldDate: number, newDate: number) => void;
   onToggleMode: () => void;
@@ -46,6 +47,7 @@ export default function HillTimeline({
   onAddProject,
   onDeleteProject,
   onUpdateProjectName,
+  onUpdateProjectColor,
   onUpdateProjectDate,
   onCommitProjectDate,
   onToggleMode,
@@ -219,18 +221,16 @@ export default function HillTimeline({
             backgroundColor: 'var(--border-muted)',
           }} />
 
-          {/* "Now" label */}
-          <span style={{
+          {/* "Now" marker — a taller accent-colored tick, no text */}
+          <div style={{
             position: 'absolute',
             left: 0,
-            top: '44px',
-            fontSize: '10px',
-            color: 'var(--fg-muted)',
-            transform: 'translateX(-4px)',
-            userSelect: 'none',
-          }}>
-            Now
-          </span>
+            top: '30px',
+            width: '2px',
+            height: '16px',
+            backgroundColor: 'var(--fg-accent)',
+            borderRadius: '1px',
+          }} />
 
           {/* Weekly ticks */}
           {weekTicks.map((pos) => (
@@ -373,9 +373,36 @@ export default function HillTimeline({
                         backgroundColor: 'var(--bg-muted)',
                         color: 'var(--fg-default)',
                         outline: 'none',
-                        marginBottom: '6px',
+                        marginBottom: '8px',
                       }}
                     />
+                    {/* Color swatches */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(6, 1fr)',
+                      gap: '4px',
+                      marginBottom: '8px',
+                    }}>
+                      {SCOPE_COLORS.map((c) => (
+                        <div
+                          key={c}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            onUpdateProjectColor(project.id, c);
+                          }}
+                          style={{
+                            width: '18px',
+                            height: '18px',
+                            borderRadius: '50%',
+                            backgroundColor: c,
+                            cursor: 'pointer',
+                            outline: project.color === c ? `2px solid ${c}` : undefined,
+                            outlineOffset: '2px',
+                            border: '2px solid var(--bg-default)',
+                          }}
+                        />
+                      ))}
+                    </div>
                     <button
                       onMouseDown={(e) => {
                         e.stopPropagation();
