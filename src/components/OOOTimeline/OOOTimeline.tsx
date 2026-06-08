@@ -14,9 +14,9 @@ interface OOOTimelineProps {
 
 function GearIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="7" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.93 2.93l1.06 1.06M10.01 10.01l1.06 1.06M10.01 3.99l1.06-1.06M3.99 10.01l-1.06 1.06" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
 }
@@ -106,13 +106,24 @@ export default function OOOTimeline({ settings, onUpdateSettings }: OOOTimelineP
   return (
     <>
       <style>{`@keyframes ooo-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      <div className="bg-bg-default border border-border-muted rounded-lg px-4 pt-2 pb-3 mb-6">
-        <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--fg-muted)', userSelect: 'none' }}>
-          Out of office
-        </span>
+      <div className="bg-bg-default border border-border-muted rounded-lg px-4 py-3 mb-6">
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '24px', minHeight: `${trackHeight}px` }}>
+          {/* Label is absolutely positioned so it doesn't widen this column — gear button sets the column width */}
+          <div style={{ position: 'relative', flexShrink: 0, paddingTop: '28px' }}>
+            <span style={{
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              fontSize: '11px',
+              fontWeight: 500,
+              color: 'var(--fg-muted)',
+              userSelect: 'none',
+              whiteSpace: 'nowrap',
+            }}>
+              Out of office
+            </span>
           {/* Gear icon + settings popover */}
-          <div ref={settingsRef} style={{ position: 'relative', flexShrink: 0, paddingTop: '26px' }}>
+          <div ref={settingsRef} style={{ position: 'relative' }}>
             <button
               onClick={() => setSettingsOpen((v) => !v)}
               title="OOO calendar settings"
@@ -136,7 +147,7 @@ export default function OOOTimeline({ settings, onUpdateSettings }: OOOTimelineP
                 onMouseDown={(e) => e.stopPropagation()}
                 style={{
                   position: 'absolute',
-                  top: '36px',
+                  top: 'calc(100% + 6px)',
                   left: '0',
                   backgroundColor: 'var(--bg-default)',
                   border: '1px solid var(--border-default)',
@@ -274,6 +285,7 @@ export default function OOOTimeline({ settings, onUpdateSettings }: OOOTimelineP
               </div>
             )}
           </div>
+          </div>{/* end left wrapper */}
 
           {/* Timeline track */}
           <div style={{ position: 'relative', flex: 1, height: `${trackHeight}px` }}>
@@ -406,3 +418,4 @@ export default function OOOTimeline({ settings, onUpdateSettings }: OOOTimelineP
     </>
   );
 }
+
