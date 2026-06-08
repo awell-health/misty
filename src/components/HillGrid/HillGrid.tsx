@@ -2,10 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Hill } from '@/types';
+import { Hill, OOOSettings } from '@/types';
 import { positionToPoint, generateHillPath } from '@/components/HillChart/hillMath';
 import { useAllPresence, PresenceUser } from '@/lib/usePresence';
 import { AnimalAvatar } from '@/lib/animalAvatars';
+import OOOTimeline from '@/components/OOOTimeline/OOOTimeline';
 
 const miniPath = generateHillPath();
 
@@ -15,6 +16,8 @@ interface HillGridProps {
   onDeleteHill: (id: string) => void;
   onDuplicateHill: (id: string) => string;
   onReorderHills: (fromIndex: number, toIndex: number) => void;
+  oooSettings: OOOSettings;
+  onUpdateOOOSettings: (updates: Partial<OOOSettings>) => void;
 }
 
 function MiniHillChart({ hill, mode }: { hill: Hill; mode: 'current' | 'goal' }) {
@@ -71,7 +74,7 @@ function MiniHillChart({ hill, mode }: { hill: Hill; mode: 'current' | 'goal' })
 
 type IndexMode = 'current' | 'goal';
 
-export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHill, onReorderHills }: HillGridProps) {
+export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHill, onReorderHills, oooSettings, onUpdateOOOSettings }: HillGridProps) {
   const router = useRouter();
   const presenceMap = useAllPresence();
   const [mode, setMode] = useState<IndexMode>('current');
@@ -121,6 +124,7 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
 
   return (
     <div className="max-w-[960px] mx-auto py-12 px-6">
+      <OOOTimeline settings={oooSettings} onUpdateSettings={onUpdateOOOSettings} />
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[32px] font-semibold text-fg-default">Hills</h1>
         <div className="flex bg-bg-muted rounded-md p-0.5 border border-border-muted">

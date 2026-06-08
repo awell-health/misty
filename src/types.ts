@@ -31,6 +31,28 @@ export interface Hill {
   timelineMode?: TimelineMode;
 }
 
+export interface OOODay {
+  date: string;    // "YYYY-MM-DD"
+  count: number;
+  names: string[];
+}
+
+export interface OOOCalendarData {
+  days: OOODay[];
+}
+
+export interface OOOSettings {
+  teamSize: number;        // total team members
+  orangeThreshold: number; // % OOO to trigger orange warning
+  redThreshold: number;    // % OOO to trigger red alert
+}
+
+export const DEFAULT_OOO_SETTINGS: OOOSettings = {
+  teamSize: 10,
+  orangeThreshold: 25,
+  redThreshold: 50,
+};
+
 export const SCOPE_COLORS = [
   '#1a7f37', // success (green)
   '#0969da', // accent (blue)

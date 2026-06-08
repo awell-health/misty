@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { ref, onValue, set, update, remove, get } from 'firebase/database';
 import { getFirebaseDb, getDbPrefix } from '@/lib/firebase';
-import { Hill, Scope, TimelineProject, TimelineMode, SCOPE_COLORS } from '@/types';
+import { Hill, Scope, TimelineProject, TimelineMode, SCOPE_COLORS, OOOSettings, DEFAULT_OOO_SETTINGS } from '@/types';
 
 type UndoAction = { undo: () => void; redo: () => void };
 
@@ -40,6 +40,8 @@ interface HillsContextValue {
   updateTimelineProjectDate: (hillId: string, projectId: string, date: number) => void;
   commitTimelineProjectDate: (hillId: string, projectId: string, oldDate: number, newDate: number) => void;
   toggleTimelineMode: (hillId: string) => void;
+  oooSettings: OOOSettings;
+  updateOOOSettings: (updates: Partial<OOOSettings>) => void;
 }
 
 const HillsContext = createContext<HillsContextValue | null>(null);
@@ -97,6 +99,7 @@ const MAX_UNDO = 50;
 export function HillsProvider({ children }: { children: ReactNode }) {
   const [hills, setHills] = useState<Hill[]>([]);
   const [loading, setLoading] = useState(true);
+  const [oooSettings, setOooSettings] = useState<OOOSettings>(DEFAULT_OOO_SETTINGS);
   const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
   const [redoStack, setRedoStack] = useState<UndoAction[]>([]);
   const isUndoRedoing = useRef(false);
@@ -158,6 +161,27 @@ export function HillsProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const db = getFirebaseDb();
+    const settingsRef = ref(db, dbPath('oooSettings'));
+    const unsubscribe = onValue(settingsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setOooSettings({
+          teamSize: data.teamSize ?? DEFAULT_OOO_SETTINGS.teamSize,
+          orangeThreshold: data.orangeThreshold ?? DEFAULT_OOO_SETTINGS.orangeThreshold,
+          redThreshold: data.redThreshold ?? DEFAULT_OOO_SETTINGS.redThreshold,
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const updateOOOSettings = useCallback((updates: Partial<OOOSettings>) => {
+    const db = getFirebaseDb();
+    update(ref(db, dbPath('oooSettings')), updates);
   }, []);
 
   const addHill = useCallback((title: string) => {
@@ -616,6 +640,8 @@ export function HillsProvider({ children }: { children: ReactNode }) {
         updateTimelineProjectDate,
         commitTimelineProjectDate,
         toggleTimelineMode,
+        oooSettings,
+        updateOOOSettings,
       }}
     >
       {children}
