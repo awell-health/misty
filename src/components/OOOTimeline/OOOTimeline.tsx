@@ -201,7 +201,7 @@ export default function OOOTimeline({ settings, onUpdateSettings }: OOOTimelineP
                   <label style={{ display: 'block', fontSize: '11px', color: 'var(--fg-muted)' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: OOO_ORANGE, display: 'inline-block', flexShrink: 0 }} />
-                      Orange warning threshold
+                      Warning threshold
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
                       <input
@@ -232,7 +232,7 @@ export default function OOOTimeline({ settings, onUpdateSettings }: OOOTimelineP
                   <label style={{ display: 'block', fontSize: '11px', color: 'var(--fg-muted)' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: OOO_RED, display: 'inline-block', flexShrink: 0 }} />
-                      Red alert threshold
+                      Alert threshold
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
                       <input
