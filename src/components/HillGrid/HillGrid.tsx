@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Hill, OOOSettings } from '@/types';
+import { Hill, OOOSettings, Metric } from '@/types';
 import { positionToPoint, generateHillPath } from '@/components/HillChart/hillMath';
 import { useAllPresence, PresenceUser } from '@/lib/usePresence';
 import { AnimalAvatar } from '@/lib/animalAvatars';
 import OOOTimeline from '@/components/OOOTimeline/OOOTimeline';
+import MetricsBar from '@/components/MetricsBar/MetricsBar';
 
 const miniPath = generateHillPath();
 
@@ -18,6 +19,8 @@ interface HillGridProps {
   onReorderHills: (fromIndex: number, toIndex: number) => void;
   oooSettings: OOOSettings;
   onUpdateOOOSettings: (updates: Partial<OOOSettings>) => void;
+  metrics: Metric[];
+  onUpdateMetric: (id: string, updates: Partial<Pick<Metric, 'type' | 'value' | 'sinceDate' | 'name'>>) => void;
 }
 
 function MiniHillChart({ hill, mode }: { hill: Hill; mode: 'current' | 'goal' }) {
@@ -74,7 +77,7 @@ function MiniHillChart({ hill, mode }: { hill: Hill; mode: 'current' | 'goal' })
 
 type IndexMode = 'current' | 'goal';
 
-export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHill, onReorderHills, oooSettings, onUpdateOOOSettings }: HillGridProps) {
+export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHill, onReorderHills, oooSettings, onUpdateOOOSettings, metrics, onUpdateMetric }: HillGridProps) {
   const router = useRouter();
   const presenceMap = useAllPresence();
   const [mode, setMode] = useState<IndexMode>('current');
@@ -124,6 +127,7 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
 
   return (
     <div className="max-w-[960px] mx-auto py-12 px-6">
+      <MetricsBar metrics={metrics} onUpdateMetric={onUpdateMetric} />
       <OOOTimeline settings={oooSettings} onUpdateSettings={onUpdateOOOSettings} />
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[32px] font-semibold text-fg-default">Hills</h1>

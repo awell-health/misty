@@ -4,7 +4,7 @@ import { useHills } from '@/context/HillsContext';
 import HillGrid from '@/components/HillGrid/HillGrid';
 
 export default function Page() {
-  const { hills, loading, addHill, deleteHill, duplicateHill, reorderHills, oooSettings, updateOOOSettings } = useHills();
+  const { hills, loading, addHill, deleteHill, duplicateHill, reorderHills, oooSettings, updateOOOSettings, metrics, updateMetric } = useHills();
 
   if (loading) {
     return (
@@ -23,6 +23,8 @@ export default function Page() {
       onReorderHills={reorderHills}
       oooSettings={oooSettings}
       onUpdateOOOSettings={updateOOOSettings}
+      metrics={metrics}
+      onUpdateMetric={updateMetric}
     />
   );
 }
