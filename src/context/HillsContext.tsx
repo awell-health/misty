@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { ref, onValue, set, update, remove, get } from 'firebase/database';
 import { getFirebaseDb, getDbPrefix } from '@/lib/firebase';
-import { Hill, Scope, TimelineProject, TimelineMode, SCOPE_COLORS, OOOSettings, DEFAULT_OOO_SETTINGS } from '@/types';
+import { Hill, Scope, TimelineProject, TimelineMode, SCOPE_COLORS, OOOSettings, DEFAULT_OOO_SETTINGS, Metric, METRIC_IDS, DEFAULT_METRICS } from '@/types';
 
 type UndoAction = { undo: () => void; redo: () => void };
 
@@ -42,6 +42,8 @@ interface HillsContextValue {
   toggleTimelineMode: (hillId: string) => void;
   oooSettings: OOOSettings;
   updateOOOSettings: (updates: Partial<OOOSettings>) => void;
+  metrics: Metric[];
+  updateMetric: (id: string, updates: Partial<Pick<Metric, 'type' | 'value' | 'sinceDate' | 'name'>>) => void;
 }
 
 const HillsContext = createContext<HillsContextValue | null>(null);
@@ -89,6 +91,21 @@ function snapshotToHills(data: Record<string, any> | null): Hill[] {
   }).sort((a, b) => a.order - b.order);
 }
 
+function snapshotToMetrics(data: Record<string, any> | null): Metric[] {
+  return METRIC_IDS.map((id, i) => {
+    const stored = data?.[id] ?? {};
+    const def = DEFAULT_METRICS[id];
+    return {
+      id,
+      type: stored.type ?? def.type,
+      value: stored.value ?? def.value,
+      sinceDate: stored.sinceDate ?? def.sinceDate,
+      name: stored.name ?? def.name,
+      order: i,
+    };
+  });
+}
+
 function dbPath(path: string): string {
   const prefix = getDbPrefix();
   return prefix ? `${prefix}/${path}` : path;
@@ -100,6 +117,7 @@ export function HillsProvider({ children }: { children: ReactNode }) {
   const [hills, setHills] = useState<Hill[]>([]);
   const [loading, setLoading] = useState(true);
   const [oooSettings, setOooSettings] = useState<OOOSettings>(DEFAULT_OOO_SETTINGS);
+  const [metrics, setMetrics] = useState<Metric[]>(() => snapshotToMetrics(null));
   const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
   const [redoStack, setRedoStack] = useState<UndoAction[]>([]);
   const isUndoRedoing = useRef(false);
@@ -183,6 +201,36 @@ export function HillsProvider({ children }: { children: ReactNode }) {
     const db = getFirebaseDb();
     update(ref(db, dbPath('oooSettings')), updates);
   }, []);
+
+  useEffect(() => {
+    const db = getFirebaseDb();
+    const metricsRef = ref(db, dbPath('metrics'));
+    const unsubscribe = onValue(metricsRef, (snapshot) => {
+      setMetrics(snapshotToMetrics(snapshot.val()));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const updateMetric = useCallback(
+    (id: string, updates: Partial<Pick<Metric, 'type' | 'value' | 'sinceDate' | 'name'>>) => {
+      const db = getFirebaseDb();
+      const metricRef = ref(db, dbPath(`metrics/${id}`));
+      get(metricRef).then((snapshot) => {
+        const prev = snapshot.val() ?? {};
+        const def = DEFAULT_METRICS[id] ?? {};
+        const oldValues: Record<string, any> = {};
+        for (const key of Object.keys(updates)) {
+          oldValues[key] = prev[key] ?? (def as Record<string, any>)[key] ?? '';
+        }
+        update(metricRef, updates);
+        pushUndo({
+          undo: () => update(ref(getFirebaseDb(), dbPath(`metrics/${id}`)), oldValues),
+          redo: () => update(ref(getFirebaseDb(), dbPath(`metrics/${id}`)), updates),
+        });
+      });
+    },
+    [pushUndo]
+  );
 
   const addHill = useCallback((title: string) => {
     const id = crypto.randomUUID();
@@ -642,6 +690,8 @@ export function HillsProvider({ children }: { children: ReactNode }) {
         toggleTimelineMode,
         oooSettings,
         updateOOOSettings,
+        metrics,
+        updateMetric,
       }}
     >
       {children}

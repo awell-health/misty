@@ -31,6 +31,27 @@ export interface Hill {
   timelineMode?: TimelineMode;
 }
 
+export type MetricType = 'raw' | 'since';
+
+export interface Metric {
+  id: string;
+  type: MetricType;
+  value: string;     // shown as the big number when type === 'raw'
+  sinceDate: string; // "YYYY-MM-DD" — counts days since this date when type === 'since'
+  name: string;      // editable label shown below the value
+  order: number;
+}
+
+// Exactly three metrics, keyed by fixed ids. Defaults live client-side and are
+// only persisted to Firebase once a metric is edited.
+export const METRIC_IDS = ['m0', 'm1', 'm2'] as const;
+
+export const DEFAULT_METRICS: Record<string, Omit<Metric, 'id' | 'order'>> = {
+  m0: { type: 'raw', value: '0', sinceDate: '', name: 'Metric one' },
+  m1: { type: 'raw', value: '0', sinceDate: '', name: 'Metric two' },
+  m2: { type: 'since', value: '0', sinceDate: '', name: 'Last incident' },
+};
+
 export interface OOODay {
   date: string;    // "YYYY-MM-DD"
   count: number;
