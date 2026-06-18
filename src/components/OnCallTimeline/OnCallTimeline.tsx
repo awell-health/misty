@@ -92,7 +92,7 @@ export default function OnCallTimeline() {
               userSelect: 'none',
               whiteSpace: 'nowrap',
             }}>
-              Traige Captain
+              Triage Captain
             </span>
             <button
               onClick={refresh}
