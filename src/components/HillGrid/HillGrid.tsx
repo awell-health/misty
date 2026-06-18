@@ -7,6 +7,7 @@ import { positionToPoint, generateHillPath } from '@/components/HillChart/hillMa
 import { useAllPresence, PresenceUser } from '@/lib/usePresence';
 import { AnimalAvatar } from '@/lib/animalAvatars';
 import OOOTimeline from '@/components/OOOTimeline/OOOTimeline';
+import OnCallTimeline from '@/components/OnCallTimeline/OnCallTimeline';
 import MetricsBar from '@/components/MetricsBar/MetricsBar';
 
 const miniPath = generateHillPath();
@@ -129,6 +130,7 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
     <div className="max-w-[960px] mx-auto py-12 px-6">
       <MetricsBar metrics={metrics} onUpdateMetric={onUpdateMetric} />
       <OOOTimeline settings={oooSettings} onUpdateSettings={onUpdateOOOSettings} />
+      <OnCallTimeline />
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[32px] font-semibold text-fg-default">Hills</h1>
         <div className="flex bg-bg-muted rounded-md p-0.5 border border-border-muted">

@@ -62,6 +62,16 @@ export interface OOOCalendarData {
   days: OOODay[];
 }
 
+export interface OnCallShift {
+  name: string;   // person on call
+  start: string;  // "YYYY-MM-DD" — first day of the shift (inclusive)
+  end: string;    // "YYYY-MM-DD" — day after the last day (exclusive)
+}
+
+export interface OnCallCalendarData {
+  shifts: OnCallShift[];
+}
+
 export interface OOOSettings {
   teamSize: number;        // total team members
   orangeThreshold: number; // % OOO to trigger orange warning
