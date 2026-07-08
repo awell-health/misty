@@ -17,10 +17,12 @@ export default function HillPage() {
   const router = useRouter();
   const [mode, setMode] = useState<HillMode>('current');
   const {
+    hills,
     getHill,
     updateHill,
     addScope,
     deleteScope,
+    moveScope,
     updateScopePosition,
     commitScopePosition,
     updateScopeGoalPosition,
@@ -62,6 +64,16 @@ export default function HillPage() {
   const handleDeleteScope = useCallback(
     (scopeId: string) => deleteScope(id, scopeId),
     [id, deleteScope]
+  );
+
+  const handleMoveScope = useCallback(
+    (scopeId: string, toHillId: string) => moveScope(id, toHillId, scopeId),
+    [id, moveScope]
+  );
+
+  const moveTargets = useMemo(
+    () => hills.filter((h) => h.id !== id && !h.completed && !h.archived).map((h) => ({ id: h.id, title: h.title })),
+    [hills, id]
   );
 
   const handleUpdatePosition = useCallback(
@@ -237,6 +249,8 @@ export default function HillPage() {
           onUpdateColor={handleUpdateScopeColor}
           onToggleHidden={handleToggleHidden}
           onToggleCompleted={handleToggleCompleted}
+          moveTargets={moveTargets}
+          onMoveScope={handleMoveScope}
         />
       </div>
       <div className="rightPanel">

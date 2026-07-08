@@ -9,6 +9,8 @@ import { AnimalAvatar } from '@/lib/animalAvatars';
 import OOOTimeline from '@/components/OOOTimeline/OOOTimeline';
 import OnCallTimeline from '@/components/OnCallTimeline/OnCallTimeline';
 import MetricsBar from '@/components/MetricsBar/MetricsBar';
+import HillPotOfGold from '@/components/HillPotOfGold/HillPotOfGold';
+import ArchivedHills from '@/components/ArchivedHills/ArchivedHills';
 
 const miniPath = generateHillPath();
 
@@ -17,6 +19,8 @@ interface HillGridProps {
   onAddHill: (title: string) => string;
   onDeleteHill: (id: string) => void;
   onDuplicateHill: (id: string) => string;
+  onToggleHillCompleted: (id: string) => void;
+  onToggleHillArchived: (id: string) => void;
   onReorderHills: (fromIndex: number, toIndex: number) => void;
   oooSettings: OOOSettings;
   onUpdateOOOSettings: (updates: Partial<OOOSettings>) => void;
@@ -78,7 +82,7 @@ function MiniHillChart({ hill, mode }: { hill: Hill; mode: 'current' | 'goal' })
 
 type IndexMode = 'current' | 'goal';
 
-export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHill, onReorderHills, oooSettings, onUpdateOOOSettings, metrics, onUpdateMetric }: HillGridProps) {
+export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHill, onToggleHillCompleted, onToggleHillArchived, onReorderHills, oooSettings, onUpdateOOOSettings, metrics, onUpdateMetric }: HillGridProps) {
   const router = useRouter();
   const presenceMap = useAllPresence();
   const [mode, setMode] = useState<IndexMode>('current');
@@ -116,11 +120,28 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
     else if (e.key === 'Escape') { setNewTitle(''); setIsAdding(false); }
   };
 
+  const activeHills = hills.filter((h) => !h.completed && !h.archived);
+  const completedHills = hills
+    .filter((h) => h.completed)
+    .slice()
+    .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
+  const archivedHills = hills
+    .filter((h) => h.archived && !h.completed)
+    .slice()
+    .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
+
   const handleDragStart = (index: number) => setDragIndex(index);
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
   const handleDragEnter = (index: number) => setOverIndex(index);
   const handleDrop = (index: number) => {
-    if (dragIndex !== null && dragIndex !== index) onReorderHills(dragIndex, index);
+    // dragIndex/index are positions within activeHills; translate to the full array.
+    if (dragIndex !== null && dragIndex !== index) {
+      const fromId = activeHills[dragIndex]?.id;
+      const toId = activeHills[index]?.id;
+      const fullFrom = hills.findIndex((h) => h.id === fromId);
+      const fullTo = hills.findIndex((h) => h.id === toId);
+      if (fullFrom !== -1 && fullTo !== -1) onReorderHills(fullFrom, fullTo);
+    }
     setDragIndex(null);
     setOverIndex(null);
   };
@@ -149,7 +170,7 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
         </div>
       </div>
       <div className="grid grid-cols-2 max-sm:grid-cols-1 auto-rows-fr gap-4">
-        {hills.map((hill, index) => (
+        {activeHills.map((hill, index) => (
           <div
             key={hill.id}
             className={`p-5 bg-bg-default border border-border-muted rounded-md cursor-pointer transition-[border-color,box-shadow,opacity] duration-150 hover:border-fg-accent hover:shadow-[0_1px_3px_var(--bg-accent-subtle)] ${dragIndex === index ? 'opacity-40' : ''} ${overIndex === index && dragIndex !== index ? 'border-fg-accent border-dashed' : ''}`}
@@ -176,25 +197,60 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
                   </svg>
                 </button>
                 {menuOpen === hill.id && (
-                  <div className="absolute top-7 right-0 bg-bg-default border border-border-muted rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.12)] z-20 min-w-[120px] overflow-hidden">
+                  <div className="absolute top-7 right-0 bg-bg-default border border-border-muted rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.12)] z-20 min-w-[180px] overflow-hidden whitespace-nowrap">
                     <button
-                      className="block w-full py-2 px-3 bg-none border-none text-[13px] text-fg-default cursor-pointer text-left hover:bg-bg-muted"
+                      className="flex items-center gap-2 w-full py-2 px-3 bg-none border-none text-[13px] text-fg-default cursor-pointer text-left hover:bg-bg-muted"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleHillCompleted(hill.id);
+                        setMenuOpen(null);
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0" aria-hidden>
+                        <path d="M5 10h14v2a5 5 0 01-5 5h-4a5 5 0 01-5-5v-2z" fill="#d4a72c" />
+                        <path d="M4 9h16a1 1 0 011 1v1H3v-1a1 1 0 011-1z" fill="#9a6700" />
+                        <path d="M9 5a3 3 0 016 0v4h-2V5a1 1 0 10-2 0v4H9V5z" fill="#d4a72c" />
+                      </svg>
+                      Move to pot of gold
+                    </button>
+                    <button
+                      className="flex items-center gap-2 w-full py-2 px-3 bg-none border-none text-[13px] text-fg-default cursor-pointer text-left hover:bg-bg-muted"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleHillArchived(hill.id);
+                        setMenuOpen(null);
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="shrink-0" aria-hidden>
+                        <path d="M1.75 2.5a.75.75 0 00-.75.75v1.5c0 .414.336.75.75.75h12.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75H1.75zM2.5 6.5v6.25c0 .69.56 1.25 1.25 1.25h8.5c.69 0 1.25-.56 1.25-1.25V6.5H2.5zm4 1.5h3a.75.75 0 010 1.5h-3a.75.75 0 010-1.5z" />
+                      </svg>
+                      Archive
+                    </button>
+                    <button
+                      className="flex items-center gap-2 w-full py-2 px-3 bg-none border-none text-[13px] text-fg-default cursor-pointer text-left hover:bg-bg-muted"
                       onClick={(e) => {
                         e.stopPropagation();
                         onDuplicateHill(hill.id);
                         setMenuOpen(null);
                       }}
                     >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="shrink-0" aria-hidden>
+                        <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25z" />
+                        <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25z" />
+                      </svg>
                       Duplicate
                     </button>
                     <button
-                      className="block w-full py-2 px-3 bg-none border-none text-[13px] text-fg-danger cursor-pointer text-left hover:bg-bg-danger-subtle"
+                      className="flex items-center gap-2 w-full py-2 px-3 bg-none border-none text-[13px] text-fg-danger cursor-pointer text-left hover:bg-bg-danger-subtle"
                       onClick={(e) => {
                         e.stopPropagation();
                         setMenuOpen(null);
                         setDeleteTarget(hill);
                       }}
                     >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="shrink-0" aria-hidden>
+                        <path d="M11 1.75V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM6.5 1.75V3h3V1.75a.25.25 0 00-.25-.25h-2.5a.25.25 0 00-.25.25zM4.997 6.178a.75.75 0 10-1.493.144l.684 7.088A2.25 2.25 0 006.43 15.5h3.14a2.25 2.25 0 002.242-2.09l.684-7.088a.75.75 0 10-1.493-.144l-.684 7.088a.75.75 0 01-.748.734H6.43a.75.75 0 01-.748-.734l-.684-7.088z" />
+                      </svg>
                       Delete
                     </button>
                   </div>
@@ -254,6 +310,18 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
           </button>
         )}
       </div>
+
+      <HillPotOfGold
+        hills={completedHills}
+        onToggleCompleted={onToggleHillCompleted}
+        onOpen={(hillId) => router.push(`/hill/${hillId}`)}
+      />
+
+      <ArchivedHills
+        hills={archivedHills}
+        onToggleArchived={onToggleHillArchived}
+        onOpen={(hillId) => router.push(`/hill/${hillId}`)}
+      />
 
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-100" onClick={() => setDeleteTarget(null)}>

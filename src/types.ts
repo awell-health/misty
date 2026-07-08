@@ -29,6 +29,10 @@ export interface Hill {
   order: number;
   timelineProjects?: TimelineProject[];
   timelineMode?: TimelineMode;
+  completed?: boolean;
+  completedAt?: number;
+  archived?: boolean;
+  archivedAt?: number;
 }
 
 export type MetricType = 'raw' | 'since';

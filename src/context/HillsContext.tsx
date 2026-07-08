@@ -20,8 +20,11 @@ interface HillsContextValue {
   reorderHills: (fromIndex: number, toIndex: number) => void;
   getHill: (id: string) => Hill | undefined;
   updateHill: (id: string, updates: Partial<Pick<Hill, 'title' | 'description'>>) => void;
+  toggleHillCompleted: (id: string) => void;
+  toggleHillArchived: (id: string) => void;
   addScope: (hillId: string, name: string) => void;
   deleteScope: (hillId: string, scopeId: string) => void;
+  moveScope: (fromHillId: string, toHillId: string, scopeId: string) => void;
   updateScopePosition: (hillId: string, scopeId: string, position: number) => void;
   commitScopePosition: (hillId: string, scopeId: string, oldPosition: number, newPosition: number) => void;
   updateScopeName: (hillId: string, scopeId: string, name: string) => void;
@@ -87,6 +90,10 @@ function snapshotToHills(data: Record<string, any> | null): Hill[] {
       order: val.order ?? 0,
       timelineProjects,
       timelineMode: val.timelineMode ?? 'fixed-timeline',
+      completed: val.completed ?? false,
+      completedAt: val.completedAt ?? undefined,
+      archived: val.archived ?? false,
+      archivedAt: val.archivedAt ?? undefined,
     };
   }).sort((a, b) => a.order - b.order);
 }
@@ -315,6 +322,58 @@ export function HillsProvider({ children }: { children: ReactNode }) {
     [pushUndo]
   );
 
+  const toggleHillCompleted = useCallback(
+    (id: string) => {
+      const hill = hills.find((h) => h.id === id);
+      if (!hill) return;
+      const newCompleted = !hill.completed;
+      const oldCompletedAt = hill.completedAt ?? null;
+      const newCompletedAt = newCompleted ? Date.now() : null;
+      const db = getFirebaseDb();
+      update(ref(db, dbPath(`hills/${id}`)), {
+        completed: newCompleted,
+        completedAt: newCompletedAt,
+      });
+      pushUndo({
+        undo: () => update(ref(getFirebaseDb(), dbPath(`hills/${id}`)), {
+          completed: !newCompleted,
+          completedAt: oldCompletedAt,
+        }),
+        redo: () => update(ref(getFirebaseDb(), dbPath(`hills/${id}`)), {
+          completed: newCompleted,
+          completedAt: newCompletedAt,
+        }),
+      });
+    },
+    [hills, pushUndo]
+  );
+
+  const toggleHillArchived = useCallback(
+    (id: string) => {
+      const hill = hills.find((h) => h.id === id);
+      if (!hill) return;
+      const newArchived = !hill.archived;
+      const oldArchivedAt = hill.archivedAt ?? null;
+      const newArchivedAt = newArchived ? Date.now() : null;
+      const db = getFirebaseDb();
+      update(ref(db, dbPath(`hills/${id}`)), {
+        archived: newArchived,
+        archivedAt: newArchivedAt,
+      });
+      pushUndo({
+        undo: () => update(ref(getFirebaseDb(), dbPath(`hills/${id}`)), {
+          archived: !newArchived,
+          archivedAt: oldArchivedAt,
+        }),
+        redo: () => update(ref(getFirebaseDb(), dbPath(`hills/${id}`)), {
+          archived: newArchived,
+          archivedAt: newArchivedAt,
+        }),
+      });
+    },
+    [hills, pushUndo]
+  );
+
   const addScope = useCallback((hillId: string, name: string) => {
     const id = crypto.randomUUID();
     const db = getFirebaseDb();
@@ -346,6 +405,41 @@ export function HillsProvider({ children }: { children: ReactNode }) {
       });
     });
   }, [pushUndo]);
+
+  const moveScope = useCallback(
+    (fromHillId: string, toHillId: string, scopeId: string) => {
+      if (fromHillId === toHillId) return;
+      const fromHill = hills.find((h) => h.id === fromHillId);
+      const scope = fromHill?.scopes.find((s) => s.id === scopeId);
+      if (!scope) return;
+      const toHill = hills.find((h) => h.id === toHillId);
+      const maxOrder = toHill?.scopes.reduce((max, s) => Math.max(max, s.order), -1) ?? -1;
+      const newId = crypto.randomUUID();
+      // Rebuild the stored shape; Firebase can't hold `undefined`, so use null.
+      const common = {
+        name: scope.name,
+        description: scope.description,
+        position: scope.position,
+        color: scope.color,
+        hidden: scope.hidden ?? false,
+        goalPosition: scope.goalPosition ?? null,
+        completed: scope.completed ?? false,
+        completedAt: scope.completedAt ?? null,
+      };
+      const movedData = { ...common, order: maxOrder + 1 };
+      const originalData = { ...common, order: scope.order };
+      const db = getFirebaseDb();
+      const fromPath = dbPath(`hills/${fromHillId}/scopes/${scopeId}`);
+      const toPath = dbPath(`hills/${toHillId}/scopes/${newId}`);
+      const doMove: Record<string, any> = { [fromPath]: null, [toPath]: movedData };
+      update(ref(db), doMove);
+      pushUndo({
+        undo: () => update(ref(getFirebaseDb()), { [toPath]: null, [fromPath]: originalData }),
+        redo: () => update(ref(getFirebaseDb()), doMove),
+      });
+    },
+    [hills, pushUndo]
+  );
 
   // Live position updates during drag — no undo entry
   const updateScopePosition = useCallback(
@@ -668,8 +762,11 @@ export function HillsProvider({ children }: { children: ReactNode }) {
         reorderHills,
         getHill,
         updateHill,
+        toggleHillCompleted,
+        toggleHillArchived,
         addScope,
         deleteScope,
+        moveScope,
         updateScopePosition,
         commitScopePosition,
         updateScopeName,
