@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Hill } from '@/types';
 
 interface HillRoadmapProps {
@@ -23,6 +23,7 @@ interface Row {
 }
 
 export default function HillRoadmap({ hills, onOpenHill }: HillRoadmapProps) {
+  const [expanded, setExpanded] = useState(false);
   const months = useMemo(() => {
     const now = new Date();
     return Array.from({ length: MONTH_COUNT }, (_, i) => {
@@ -69,65 +70,102 @@ export default function HillRoadmap({ hills, onOpenHill }: HillRoadmapProps) {
   rows.sort((a, b) => a.date - b.date);
 
   const gridTemplateColumns = `minmax(120px, 220px) repeat(${MONTH_COUNT}, 1fr)`;
+  const collapsedGridTemplateColumns = `repeat(${MONTH_COUNT}, 1fr)`;
+
+  const cellKind = (row: Row, i: number): CellKind =>
+    i === row.launchIdx
+      ? 'launch'
+      : i >= row.buildStartIdx && i < row.launchIdx
+        ? 'build'
+        : 'empty';
+
+  const cellStyle = (kind: CellKind) =>
+    kind === 'launch'
+      ? { backgroundColor: 'var(--bg-accent-subtle)', color: 'var(--fg-accent)' }
+      : kind === 'build'
+        ? { backgroundColor: BUILD_BG, color: 'var(--fg-success)' }
+        : undefined;
 
   return (
     <div className="bg-bg-default border border-border-muted rounded-lg px-4 py-3 mb-6">
-      <div className="grid gap-1 items-stretch" style={{ gridTemplateColumns }}>
-        {/* Header row */}
-        <div className="text-[11px] font-medium text-fg-muted self-end pb-1 select-none">
-          Roadmap
-        </div>
-        {months.map((m) => (
-          <div
-            key={`${m.year}-${m.month}`}
-            className="text-[11px] font-medium text-fg-muted text-center pb-1 select-none"
-          >
-            {m.label}
-          </div>
-        ))}
+      {/* Toggle header */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex items-center gap-2 bg-none border-none p-0 cursor-pointer text-fg-muted hover:text-fg-accent select-none w-full mb-1"
+      >
+        <svg
+          width="12" height="12" viewBox="0 0 16 16" fill="currentColor"
+          className={`transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
+          aria-hidden
+        >
+          <path d="M6.22 3.22a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 010-1.06z" />
+        </svg>
+        <span className="text-[11px] font-medium">Roadmap</span>
+      </button>
 
-        {/* Goal rows */}
-        {rows.length === 0 && (
-          <div className="col-span-full text-[12px] text-fg-muted text-center py-2 select-none">
-            No goals in the next {MONTH_COUNT} months.
-          </div>
-        )}
-        {rows.map((row, r) => (
-          <div key={`${row.hillId}-${r}`} className="contents">
-            <button
-              onClick={() => onOpenHill(row.hillId)}
-              className="flex flex-col text-left pr-2 py-1.5 bg-none border-none cursor-pointer group min-w-0"
-              title={`${row.hillTitle}: ${row.name}`}
+      {rows.length === 0 ? (
+        <div className="text-[12px] text-fg-muted text-center py-2 select-none">
+          No goals in the next {MONTH_COUNT} months.
+        </div>
+      ) : expanded ? (
+        <div className="grid gap-1 items-stretch" style={{ gridTemplateColumns }}>
+          {/* Header row */}
+          <div className="text-[11px] font-medium text-fg-muted self-end pb-1 select-none" />
+          {months.map((m) => (
+            <div
+              key={`${m.year}-${m.month}`}
+              className="text-[11px] font-medium text-fg-muted text-center pb-1 select-none"
             >
-              <span className="text-[11px] text-fg-muted truncate group-hover:text-fg-accent">{row.hillTitle}</span>
-              <span className="text-[13px] text-fg-default truncate group-hover:text-fg-accent">{row.name}</span>
-            </button>
-            {months.map((_, i) => {
-              const kind: CellKind =
-                i === row.launchIdx
-                  ? 'launch'
-                  : i >= row.buildStartIdx && i < row.launchIdx
-                    ? 'build'
-                    : 'empty';
-              return (
-                <div
-                  key={i}
-                  className="flex items-center justify-center rounded-sm text-[11px] font-medium min-h-[28px] select-none"
-                  style={
-                    kind === 'launch'
-                      ? { backgroundColor: 'var(--bg-accent-subtle)', color: 'var(--fg-accent)' }
-                      : kind === 'build'
-                        ? { backgroundColor: BUILD_BG, color: 'var(--fg-success)' }
-                        : undefined
-                  }
-                >
-                  {kind === 'launch' ? 'Launch' : kind === 'build' ? 'Build' : ''}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
+              {m.label}
+            </div>
+          ))}
+
+          {/* Goal rows */}
+          {rows.map((row, r) => (
+            <div key={`${row.hillId}-${r}`} className="contents">
+              <button
+                onClick={() => onOpenHill(row.hillId)}
+                className="flex flex-col text-left pr-2 py-1.5 bg-none border-none cursor-pointer group min-w-0"
+                title={`${row.hillTitle}: ${row.name}`}
+              >
+                <span className="text-[11px] text-fg-muted truncate group-hover:text-fg-accent">{row.hillTitle}</span>
+                <span className="text-[13px] text-fg-default truncate group-hover:text-fg-accent">{row.name}</span>
+              </button>
+              {months.map((_, i) => {
+                const kind = cellKind(row, i);
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-center rounded-sm text-[11px] font-medium min-h-[28px] select-none"
+                    style={cellStyle(kind)}
+                  >
+                    {kind === 'launch' ? 'Launch' : kind === 'build' ? 'Build' : ''}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* Collapsed view — just the visual bars, no labels or text */
+        <div className="grid gap-0.5" style={{ gridTemplateColumns: collapsedGridTemplateColumns }}>
+          {rows.map((row, r) => (
+            <div key={`${row.hillId}-${r}`} className="contents">
+              {months.map((_, i) => {
+                const kind = cellKind(row, i);
+                return (
+                  <div
+                    key={i}
+                    className="rounded-sm min-h-[6px]"
+                    style={cellStyle(kind)}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
