@@ -65,20 +65,22 @@ export default function HillTimeline({
   const { monthMarkers, weekTicks, timelineStart, timelineTotalMs } = useMemo(() => {
     const now = new Date();
     const start = now.getTime();
-    const end = new Date(now.getFullYear(), now.getMonth() + 3, now.getDate()).getTime();
+    // Cap at the last day of the 6th month counting the current one: in July the
+    // window ends on Dec 31 (day 0 of month+6 = last day of the prior month).
+    const end = new Date(now.getFullYear(), now.getMonth() + 6, 0).getTime();
     const totalMs = end - start;
 
-    const months = Array.from({ length: 3 }, (_, i) => {
+    const months = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
       return {
         label: d.toLocaleString('default', { month: 'short' }),
         position: (d.getTime() - start) / totalMs,
       };
-    });
+    }).filter((m) => m.position < 1);
 
     // One tick per month at the 15th (halfway through each month)
     const midMonths: number[] = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 6; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() + i + 1, 15);
       const pos = (d.getTime() - start) / totalMs;
       if (pos > 0 && pos < 1) midMonths.push(pos);

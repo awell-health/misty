@@ -9,6 +9,7 @@ import { AnimalAvatar } from '@/lib/animalAvatars';
 import OOOTimeline from '@/components/OOOTimeline/OOOTimeline';
 import OnCallTimeline from '@/components/OnCallTimeline/OnCallTimeline';
 import MetricsBar from '@/components/MetricsBar/MetricsBar';
+import HillRoadmap from '@/components/HillRoadmap/HillRoadmap';
 import HillPotOfGold from '@/components/HillPotOfGold/HillPotOfGold';
 import ArchivedHills from '@/components/ArchivedHills/ArchivedHills';
 
@@ -152,6 +153,7 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
       <MetricsBar metrics={metrics} onUpdateMetric={onUpdateMetric} />
       <OOOTimeline settings={oooSettings} onUpdateSettings={onUpdateOOOSettings} />
       <OnCallTimeline />
+      <HillRoadmap hills={hills} onOpenHill={(id) => router.push(`/hill/${id}`)} />
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[32px] font-semibold text-fg-default">Hills</h1>
         <div className="flex bg-bg-muted rounded-md p-0.5 border border-border-muted">
