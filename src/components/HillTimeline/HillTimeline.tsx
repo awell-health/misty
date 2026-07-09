@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { TimelineProject, TimelineMode, SCOPE_COLORS } from '@/types';
 
 interface HillTimelineProps {
@@ -19,6 +19,9 @@ const MODE_LABELS: Record<TimelineMode, string> = {
   'fixed-timeline': 'Fixed Timeline + Variable Scope',
   'fixed-scope': 'Fixed Scope + Variable Timeline',
 };
+
+// Vertical height of one stacked name label; colliding labels step up by this.
+const NAME_LINE_H = 15;
 
 function CalendarIcon() {
   return (
@@ -61,6 +64,8 @@ export default function HillTimeline({
   const dragStartPos = useRef<number | null>(null);
   const hasDragged = useRef(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const labelRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [lanes, setLanes] = useState<Record<string, number>>({});
 
   const { monthMarkers, weekTicks, timelineStart, timelineTotalMs } = useMemo(() => {
     const now = new Date();
@@ -101,6 +106,48 @@ export default function HillTimeline({
     const rect = el.getBoundingClientRect();
     return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
   }, []);
+
+  // Assign each name label to a vertical lane so overlapping labels stack up
+  // instead of colliding. Horizontal positions are lane-independent, so a single
+  // measure pass is stable.
+  const posKey = projects.map((p) => `${p.id}:${p.date}`).join('|');
+  useLayoutEffect(() => {
+    const compute = () => {
+      const items = projects
+        .map((p) => {
+          const el = labelRefs.current[p.id];
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { id: p.id, left: r.left, right: r.right };
+        })
+        .filter((x): x is { id: string; left: number; right: number } => x !== null)
+        .sort((a, b) => a.left - b.left);
+
+      const laneRight: number[] = [];
+      const next: Record<string, number> = {};
+      const GAP = 8;
+      for (const it of items) {
+        let lane = 0;
+        while (lane < laneRight.length && laneRight[lane] + GAP > it.left) lane++;
+        laneRight[lane] = it.right;
+        next[it.id] = lane;
+      }
+
+      setLanes((prev) => {
+        const keys = Object.keys(next);
+        if (keys.length === Object.keys(prev).length && keys.every((k) => prev[k] === next[k])) {
+          return prev;
+        }
+        return next;
+      });
+    };
+
+    compute();
+    const ro = new ResizeObserver(compute);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posKey]);
 
   const handleDotMouseDown = useCallback((e: React.MouseEvent, project: TimelineProject) => {
     e.preventDefault();
@@ -187,7 +234,7 @@ export default function HillTimeline({
 
   return (
     <div className="bg-bg-default border border-border-muted rounded-lg px-4 pt-2 pb-3 mb-2">
-      <div className="flex items-center gap-6" style={{ height: '68px' }}>
+      <div className="flex items-center gap-6" style={{ height: '92px' }}>
         {/* Mode toggle */}
         <button
           onClick={onToggleMode}
@@ -218,7 +265,7 @@ export default function HillTimeline({
             position: 'absolute',
             left: 0,
             right: 0,
-            top: '38px',
+            top: '60px',
             height: '1px',
             backgroundColor: 'var(--border-muted)',
           }} />
@@ -227,7 +274,7 @@ export default function HillTimeline({
           <div style={{
             position: 'absolute',
             left: 0,
-            top: '30px',
+            top: '52px',
             width: '2px',
             height: '16px',
             backgroundColor: 'var(--fg-accent)',
@@ -241,7 +288,7 @@ export default function HillTimeline({
               style={{
                 position: 'absolute',
                 left: `${pos * 100}%`,
-                top: '34px',
+                top: '56px',
                 transform: 'translateX(-50%)',
                 width: '1px',
                 height: '8px',
@@ -257,7 +304,7 @@ export default function HillTimeline({
               style={{
                 position: 'absolute',
                 left: `${m.position * 100}%`,
-                top: '32px',
+                top: '54px',
                 transform: 'translateX(-50%)',
                 display: 'flex',
                 flexDirection: 'column',
@@ -275,27 +322,45 @@ export default function HillTimeline({
           {projects.map((project) => {
             const showHoverLabel = (hoveredId === project.id || draggingId === project.id) && tooltipId !== project.id;
             const visualPos = Math.max(0, Math.min(1, dateToPosition(project.date)));
+            const lane = lanes[project.id] ?? 0;
             return (
               <div
                 key={project.id}
                 style={{
                   position: 'absolute',
                   left: `${visualPos * 100}%`,
-                  top: '31px',
+                  top: '53px',
                   transform: 'translate(-50%, 0)',
                   zIndex: draggingId === project.id ? 20 : tooltipId === project.id ? 15 : hoveredId === project.id ? 10 : 5,
                 }}
               >
-                {/* Name label — always visible */}
+                {/* Connector line from the dot up to its (possibly stacked) name */}
                 <div style={{
                   position: 'absolute',
-                  bottom: 'calc(100% + 4px)',
                   left: '50%',
+                  bottom: '100%',
                   transform: 'translateX(-50%)',
-                  whiteSpace: 'nowrap',
+                  width: '1px',
+                  height: `calc(4px + ${lane * NAME_LINE_H}px)`,
+                  backgroundColor: project.color,
+                  opacity: 0.4,
                   pointerEvents: 'none',
-                  textAlign: 'center',
-                }}>
+                }} />
+
+                {/* Name label — always visible; stacks up a lane when it would
+                    collide with a neighbouring label */}
+                <div
+                  ref={(el) => { labelRefs.current[project.id] = el; }}
+                  style={{
+                    position: 'absolute',
+                    bottom: `calc(100% + 4px + ${lane * NAME_LINE_H}px)`,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    whiteSpace: 'nowrap',
+                    pointerEvents: 'none',
+                    textAlign: 'center',
+                  }}
+                >
                   {/* Date — only on hover or while dragging, shown above name */}
                   {showHoverLabel && (
                     <div style={{ fontSize: '10px', color: 'var(--fg-muted)', lineHeight: 1.3, userSelect: 'none' }}>
