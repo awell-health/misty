@@ -92,12 +92,11 @@ export default function HillRoadmap({ hills, onOpenHill }: HillRoadmapProps) {
           <div key={`${row.hillId}-${r}`} className="contents">
             <button
               onClick={() => onOpenHill(row.hillId)}
-              className="text-left text-[13px] truncate pr-2 py-1.5 bg-none border-none cursor-pointer group"
+              className="flex flex-col text-left pr-2 py-1.5 bg-none border-none cursor-pointer group min-w-0"
               title={`${row.hillTitle}: ${row.name}`}
             >
-              <span className="text-fg-muted group-hover:text-fg-accent">{row.hillTitle}</span>
-              <span className="text-fg-muted"> · </span>
-              <span className="text-fg-default group-hover:text-fg-accent">{row.name}</span>
+              <span className="text-[11px] text-fg-muted truncate group-hover:text-fg-accent">{row.hillTitle}</span>
+              <span className="text-[13px] text-fg-default truncate group-hover:text-fg-accent">{row.name}</span>
             </button>
             {months.map((_, i) => {
               const kind: CellKind =
