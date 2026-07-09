@@ -15,6 +15,7 @@ type CellKind = 'build' | 'launch' | 'empty';
 
 interface Row {
   hillId: string;
+  hillTitle: string;  // owning hill title, shown before the goal name
   name: string;       // goal name
   date: number;       // goal target date (epoch ms) — for ordering
   launchIdx: number;  // column index of the launch month (within window)
@@ -49,6 +50,7 @@ export default function HillRoadmap({ hills, onOpenHill }: HillRoadmapProps) {
       if (idx !== -1) {
         rows.push({
           hillId: hill.id,
+          hillTitle: hill.title || 'Untitled hill',
           name: p.name || 'Untitled goal',
           date: p.date,
           launchIdx: idx,
@@ -90,10 +92,12 @@ export default function HillRoadmap({ hills, onOpenHill }: HillRoadmapProps) {
           <div key={`${row.hillId}-${r}`} className="contents">
             <button
               onClick={() => onOpenHill(row.hillId)}
-              className="text-left text-[13px] text-fg-default truncate pr-2 py-1.5 bg-none border-none cursor-pointer hover:text-fg-accent"
-              title={row.name}
+              className="text-left text-[13px] truncate pr-2 py-1.5 bg-none border-none cursor-pointer group"
+              title={`${row.hillTitle}: ${row.name}`}
             >
-              {row.name}
+              <span className="text-fg-muted group-hover:text-fg-accent">{row.hillTitle}</span>
+              <span className="text-fg-muted"> · </span>
+              <span className="text-fg-default group-hover:text-fg-accent">{row.name}</span>
             </button>
             {months.map((_, i) => {
               const kind: CellKind =
