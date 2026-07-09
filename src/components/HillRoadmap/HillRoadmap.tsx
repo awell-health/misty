@@ -43,21 +43,25 @@ export default function HillRoadmap({ hills, onOpenHill }: HillRoadmapProps) {
   const rows: Row[] = [];
   activeHills.forEach((hill) => {
     const sorted = [...(hill.timelineProjects ?? [])].sort((a, b) => a.date - b.date);
-    let prevLaunchIdx = -1;
+    let prevIdx = -1;  // launch column of the previously processed in-window goal
+    let boundary = -1; // last launch column strictly earlier than the current month group
     sorted.forEach((p) => {
       const d = new Date(p.date);
       const idx = months.findIndex((m) => m.year === d.getFullYear() && m.month === d.getMonth());
-      if (idx !== -1) {
-        rows.push({
-          hillId: hill.id,
-          hillTitle: hill.title || 'Untitled hill',
-          name: p.name || 'Untitled goal',
-          date: p.date,
-          launchIdx: idx,
-          buildStartIdx: Math.max(0, prevLaunchIdx + 1),
-        });
-        prevLaunchIdx = idx;
-      }
+      if (idx === -1) return;
+      // Only advance the build boundary at a strictly later month, so goals that
+      // launch in the same month share the same build phase instead of the later
+      // ones getting sequenced past their own launch.
+      if (idx !== prevIdx) boundary = prevIdx;
+      rows.push({
+        hillId: hill.id,
+        hillTitle: hill.title || 'Untitled hill',
+        name: p.name || 'Untitled goal',
+        date: p.date,
+        launchIdx: idx,
+        buildStartIdx: Math.max(0, boundary + 1),
+      });
+      prevIdx = idx;
     });
   });
 
