@@ -107,7 +107,8 @@ test('can delete a scope', async ({ page }) => {
   await createHill(page, 'Delete Scope Hill');
   await addScope(page, 'To Delete');
   await expect(page.getByText('To Delete').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Delete To Delete' }).click();
+  await page.getByRole('button', { name: 'To Delete options' }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(page.getByText('To Delete')).not.toBeVisible();
 });
 

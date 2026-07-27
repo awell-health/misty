@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useCallback, useMemo } from 'react';
 import { useHills } from '@/context/HillsContext';
 import { usePresence } from '@/lib/usePresence';
+import { consumeNavigatedFromIndex } from '@/lib/hillNav';
 import HillDescription from '@/components/HillDescription/HillDescription';
 import ScopePanel from '@/components/ScopePanel/ScopePanel';
 import HillChart from '@/components/HillChart/HillChart';
@@ -16,6 +17,12 @@ export default function HillPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [mode, setMode] = useState<HillMode>('current');
+  // If we got here from the hills index, pop history instead of pushing "/" so
+  // the browser restores the index's scroll position.
+  const handleBackToHills = useCallback(() => {
+    if (consumeNavigatedFromIndex()) router.back();
+    else router.push('/');
+  }, [router]);
   const {
     hills,
     getHill,
@@ -227,7 +234,7 @@ export default function HillPage() {
     <div className="layout">
       <div className="leftPanel">
         <button
-          onClick={() => router.push('/')}
+          onClick={handleBackToHills}
           className="bg-none border-none text-fg-muted cursor-pointer text-xs mb-4 p-0 hover:text-fg-default"
         >
           &larr; All hills

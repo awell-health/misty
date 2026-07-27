@@ -6,6 +6,7 @@ import { Hill, OOOSettings, Metric } from '@/types';
 import { positionToPoint, generateHillPath } from '@/components/HillChart/hillMath';
 import { useAllPresence, PresenceUser } from '@/lib/usePresence';
 import { AnimalAvatar } from '@/lib/animalAvatars';
+import { markNavigatedFromIndex } from '@/lib/hillNav';
 import OOOTimeline from '@/components/OOOTimeline/OOOTimeline';
 import OnCallTimeline from '@/components/OnCallTimeline/OnCallTimeline';
 import MetricsBar from '@/components/MetricsBar/MetricsBar';
@@ -86,6 +87,12 @@ type IndexMode = 'current' | 'goal';
 export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHill, onToggleHillCompleted, onToggleHillArchived, onReorderHills, oooSettings, onUpdateOOOSettings, metrics, onUpdateMetric }: HillGridProps) {
   const router = useRouter();
   const presenceMap = useAllPresence();
+  // Leaves a breadcrumb so the hill page's "All hills" button can go back
+  // through history and keep this page's scroll position.
+  const openHill = (id: string) => {
+    markNavigatedFromIndex();
+    router.push(`/hill/${id}`);
+  };
   const [mode, setMode] = useState<IndexMode>('current');
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -112,7 +119,7 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
       const id = onAddHill(trimmed);
       setNewTitle('');
       setIsAdding(false);
-      router.push(`/hill/${id}`);
+      openHill(id);
     }
   };
 
@@ -153,7 +160,7 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
       <MetricsBar metrics={metrics} onUpdateMetric={onUpdateMetric} />
       <OOOTimeline settings={oooSettings} onUpdateSettings={onUpdateOOOSettings} />
       <OnCallTimeline />
-      <HillRoadmap hills={hills} onOpenHill={(id) => router.push(`/hill/${id}`)} />
+      <HillRoadmap hills={hills} onOpenHill={(id) => openHill(id)} />
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[32px] font-semibold text-fg-default">Hills</h1>
         <div className="flex bg-bg-muted rounded-md p-0.5 border border-border-muted">
@@ -176,7 +183,7 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
           <div
             key={hill.id}
             className={`p-5 bg-bg-default border border-border-muted rounded-md cursor-pointer transition-[border-color,box-shadow,opacity] duration-150 hover:border-fg-accent hover:shadow-[0_1px_3px_var(--bg-accent-subtle)] ${dragIndex === index ? 'opacity-40' : ''} ${overIndex === index && dragIndex !== index ? 'border-fg-accent border-dashed' : ''}`}
-            onClick={() => router.push(`/hill/${hill.id}`)}
+            onClick={() => openHill(hill.id)}
             draggable
             onDragStart={() => handleDragStart(index)}
             onDragOver={handleDragOver}
@@ -316,13 +323,13 @@ export default function HillGrid({ hills, onAddHill, onDeleteHill, onDuplicateHi
       <HillPotOfGold
         hills={completedHills}
         onToggleCompleted={onToggleHillCompleted}
-        onOpen={(hillId) => router.push(`/hill/${hillId}`)}
+        onOpen={(hillId) => openHill(hillId)}
       />
 
       <ArchivedHills
         hills={archivedHills}
         onToggleArchived={onToggleHillArchived}
-        onOpen={(hillId) => router.push(`/hill/${hillId}`)}
+        onOpen={(hillId) => openHill(hillId)}
       />
 
       {deleteTarget && (
