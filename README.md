@@ -59,13 +59,34 @@ In the Firebase Console, create the key `{prefix}/password` (e.g. `dev/password`
 
 If no password key exists, the app is accessible without a password.
 
-## Deploy to Vercel
+## Deployment
 
-1. Push to GitHub and connect the repo to Vercel
-2. Add environment variables in Vercel project settings:
-   - `NEXT_PUBLIC_FIREBASE_DB_URL` — your Firebase RTDB URL
-   - `NEXT_PUBLIC_FIREBASE_DB_PREFIX` — `prod` (or your preferred prefix)
-3. Deploy
+Deployment is handled by Vercel's [Git integration](https://vercel.com/docs/deployments/git/vercel-for-github):
+
+- Every push to `main` deploys to **production**
+- Every push to any other branch (and every PR) gets its own **preview** deployment, with the URL commented on the PR
+
+No deploy secrets are needed in GitHub — Vercel builds and deploys on its own
+infrastructure. A separate [CI workflow](.github/workflows/ci.yml) runs unit
+tests on every push and PR; it requires no secrets, so it's safe for forks.
+
+### Vercel project setup
+
+Environment variables live in Vercel project settings (not GitHub):
+
+- `NEXT_PUBLIC_FIREBASE_DB_URL` — your Firebase RTDB URL
+- `NEXT_PUBLIC_FIREBASE_DB_PREFIX` — `prod` for production; optionally `dev` for preview deployments
+
+Vercel deploys on push regardless of CI status. To keep failing tests out of
+production, protect `main` in GitHub (Settings → Branches → require the **CI /
+test** check to pass) so changes land via PRs that must be green before merging.
+
+### Rollback
+
+```bash
+vercel rollback            # revert to the previous production deployment
+vercel rollback <url>      # revert to a specific deployment
+```
 
 ## Testing
 
