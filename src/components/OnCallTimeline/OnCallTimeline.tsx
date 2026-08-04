@@ -2,8 +2,18 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useOnCallCalendar } from '@/lib/useOnCallCalendar';
+import { useOOOCalendar } from '@/lib/useOOOCalendar';
 
 const ONCALL_COLOR = '#8250df';
+const CONFLICT_COLOR = '#d1242f';
+
+// Event summaries on the two calendars may not match exactly (e.g. "Mike OOO"
+// vs "Mike Pack"), so treat names as matching when one contains the other.
+function namesMatch(a: string, b: string): boolean {
+  const na = a.trim().toLowerCase();
+  const nb = b.trim().toLowerCase();
+  return na.length > 0 && nb.length > 0 && (na.includes(nb) || nb.includes(na));
+}
 
 function RefreshIcon({ spinning }: { spinning: boolean }) {
   return (
@@ -27,6 +37,7 @@ const BASELINE_TOP = 38;
 
 export default function OnCallTimeline() {
   const { data, loading, refreshing, refresh } = useOnCallCalendar();
+  const { data: oooData } = useOOOCalendar();
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const { monthMarkers, weekTicks, timelineStart, timelineTotalMs } = useMemo(() => {
@@ -62,6 +73,15 @@ export default function OnCallTimeline() {
     new Date(dateStr + 'T00:00:00').toLocaleDateString('default', { month: 'short', day: 'numeric' }),
   []);
 
+  // The captain has a conflict when they also appear on the OOO calendar on
+  // any day of their shift (shift.end is exclusive).
+  const captainIsOOO = useCallback((shift: { name: string; start: string; end: string }) =>
+    (oooData?.days ?? []).some((day) =>
+      day.date >= shift.start && day.date < shift.end &&
+      day.names.some((n) => namesMatch(n, shift.name))
+    ),
+  [oooData]);
+
   // Each shift becomes a segment on the line; the dot sits at the segment's
   // midpoint. end is exclusive, so the last covered day is end - 1.
   const visibleShifts = (data?.shifts ?? [])
@@ -71,7 +91,7 @@ export default function OnCallTimeline() {
       const lastDay = new Date(shift.end + 'T00:00:00');
       lastDay.setDate(lastDay.getDate() - 1);
       const lastDayStr = lastDay.toISOString().split('T')[0];
-      return { ...shift, i, startPos, endPos, midPos: (startPos + endPos) / 2, lastDayStr };
+      return { ...shift, i, startPos, endPos, midPos: (startPos + endPos) / 2, lastDayStr, conflict: captainIsOOO(shift) };
     })
     .filter((s) => s.endPos > 0 && s.startPos < 1 && s.endPos > s.startPos);
 
@@ -177,6 +197,7 @@ export default function OnCallTimeline() {
             {/* On-call shifts — a subtle span shows coverage, the dot sits on the line */}
             {!loading && visibleShifts.map((shift) => {
               const isHovered = hoveredIndex === shift.i;
+              const shiftColor = shift.conflict ? CONFLICT_COLOR : ONCALL_COLOR;
               return (
                 <div key={shift.i}>
                   {/* Coverage span sitting on the baseline */}
@@ -187,7 +208,7 @@ export default function OnCallTimeline() {
                     top: `${BASELINE_TOP - 1.5}px`,
                     height: '4px',
                     borderRadius: '2px',
-                    backgroundColor: ONCALL_COLOR,
+                    backgroundColor: shiftColor,
                     opacity: isHovered ? 0.45 : 0.25,
                   }} />
 
@@ -225,6 +246,11 @@ export default function OnCallTimeline() {
                         <div style={{ fontSize: '10px', color: 'var(--fg-muted)', lineHeight: 1.3, userSelect: 'none' }}>
                           {formatDate(shift.start)} – {formatDate(shift.lastDayStr)}
                         </div>
+                        {shift.conflict && (
+                          <div style={{ fontSize: '10px', color: CONFLICT_COLOR, lineHeight: 1.4, userSelect: 'none' }}>
+                            OOO during this shift
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -232,7 +258,7 @@ export default function OnCallTimeline() {
                       width: '10px',
                       height: '10px',
                       borderRadius: '50%',
-                      backgroundColor: ONCALL_COLOR,
+                      backgroundColor: shiftColor,
                       border: '2px solid var(--bg-default)',
                       boxSizing: 'content-box',
                     }} />
@@ -245,7 +271,7 @@ export default function OnCallTimeline() {
                     top: `${BASELINE_TOP + 12}px`,
                     transform: 'translateX(-50%)',
                     fontSize: '10px',
-                    color: isHovered ? 'var(--fg-default)' : 'var(--fg-muted)',
+                    color: shift.conflict ? CONFLICT_COLOR : isHovered ? 'var(--fg-default)' : 'var(--fg-muted)',
                     whiteSpace: 'nowrap',
                     userSelect: 'none',
                     pointerEvents: 'none',

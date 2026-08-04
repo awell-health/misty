@@ -47,10 +47,10 @@ export default function OOOTimeline({ settings, onUpdateSettings }: OOOTimelineP
   const { monthMarkers, weekTicks, timelineStart, timelineTotalMs } = useMemo(() => {
     const now = new Date();
     const start = now.getTime();
-    const end = new Date(now.getFullYear(), now.getMonth() + 3, now.getDate()).getTime();
+    const end = new Date(now.getFullYear(), now.getMonth() + 2, now.getDate()).getTime();
     const totalMs = end - start;
 
-    const months = Array.from({ length: 3 }, (_, i) => {
+    const months = Array.from({ length: 2 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
       return {
         label: d.toLocaleString('default', { month: 'short' }),
@@ -59,7 +59,7 @@ export default function OOOTimeline({ settings, onUpdateSettings }: OOOTimelineP
     });
 
     const midMonths: number[] = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() + i + 1, 15);
       const pos = (d.getTime() - start) / totalMs;
       if (pos > 0 && pos < 1) midMonths.push(pos);

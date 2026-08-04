@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   const now = new Date();
   const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const timeMax = new Date(now.getFullYear(), now.getMonth() + 3, now.getDate()).toISOString();
+  const timeMax = new Date(now.getFullYear(), now.getMonth() + 2, now.getDate()).toISOString();
 
   const events = await fetchCalendarEvents(calendarId, timeMin, timeMax);
   if (!events) {
