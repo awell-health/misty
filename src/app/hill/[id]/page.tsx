@@ -25,6 +25,7 @@ export default function HillPage() {
   }, [router]);
   const {
     hills,
+    loading,
     getHill,
     updateHill,
     addScope,
@@ -218,6 +219,17 @@ export default function HillPage() {
     });
     return map;
   }, [hill, mode]);
+
+  // Hills arrive from Firebase after first paint, so until they do, every id
+  // looks missing. Without this the page flashes "Hill not found." on the way
+  // to rendering the hill. Matches the loading state on the hills index.
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--fg-muted)' }}>
+        Loading...
+      </div>
+    );
+  }
 
   if (!hill) {
     return (
