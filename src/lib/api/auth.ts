@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
+ * Environment variables holding a valid bearer token. Each consumer gets its
+ * own, so one can be revoked without rotating the token everyone else uses.
+ * Adding a consumer is one line here.
+ */
+const TOKEN_VARS = ['API_TOKEN', 'API_TOKEN_FLYWHEEL'] as const;
+
+/**
  * Bearer-token guard for the data API.
  *
  * Set API_TOKEN in the environment (server-only — do NOT prefix with
@@ -11,8 +18,10 @@ import { NextRequest, NextResponse } from 'next/server';
  * (denied) return denied;`).
  */
 export function requireAuth(request: NextRequest): NextResponse | null {
-  const expected = process.env.API_TOKEN;
-  if (!expected) {
+  const accepted = TOKEN_VARS.map((name) => process.env[name]).filter(
+    (value): value is string => Boolean(value)
+  );
+  if (accepted.length === 0) {
     return NextResponse.json(
       { error: 'API_TOKEN is not configured on the server.' },
       { status: 503 }
@@ -22,8 +31,16 @@ export function requireAuth(request: NextRequest): NextResponse | null {
   const header = request.headers.get('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
 
-  // Length-check first so timingSafeEqual doesn't throw on mismatched sizes.
-  if (token.length !== expected.length || !safeEqual(token, expected)) {
+  // Not `.some()`: short-circuiting would let response timing reveal which of
+  // the accepted tokens matched. Length-check first so safeEqual doesn't read
+  // past the end of the shorter string.
+  let authorized = false;
+  for (const expected of accepted) {
+    const match = token.length === expected.length && safeEqual(token, expected);
+    authorized = authorized || match;
+  }
+
+  if (!authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
