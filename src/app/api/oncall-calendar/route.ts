@@ -1,50 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchCalendarEvents, addOneDay } from '@/lib/googleCalendar';
-import { OnCallShift } from '@/types';
+import { parseIcs } from '@/lib/ics';
+import { shiftsFromFeed } from '@/lib/onCallFeed';
 
 export const runtime = 'nodejs';
 
+// The Triage Captain schedule comes from incident.io's iCal feed. The feed URL
+// embeds its own access token, so it lives in the environment, not the code.
 export async function GET(request: NextRequest) {
-  const calendarId = process.env.ONCALL_CALENDAR_ID;
+  const feedUrl = process.env.ONCALL_FEED_URL;
 
-  if (!calendarId) {
+  if (!feedUrl) {
     return NextResponse.json({ shifts: [] });
   }
 
   const { searchParams } = new URL(request.url);
   const force = searchParams.get('force') === '1';
 
-  const now = new Date();
-  const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const timeMax = new Date(now.getFullYear(), now.getMonth() + 2, now.getDate()).toISOString();
-
-  const events = await fetchCalendarEvents(calendarId, timeMin, timeMax);
-  if (!events) {
+  let text: string;
+  try {
+    const res = await fetch(feedUrl, { cache: 'no-store' });
+    if (!res.ok) return NextResponse.json({ shifts: [] });
+    text = await res.text();
+  } catch {
     return NextResponse.json({ shifts: [] });
   }
 
-  // One person is on call at a time, so each event is a single shift segment.
-  const shifts: OnCallShift[] = [];
-
-  for (const event of events) {
-    const name = event.summary || 'On call';
-    let start: string;
-    let end: string;
-
-    if (event.start.date) {
-      start = event.start.date;
-      end = event.end.date!;
-    } else if (event.start.dateTime) {
-      start = event.start.dateTime.split('T')[0];
-      end = event.end.dateTime ? addOneDay(event.end.dateTime.split('T')[0]) : addOneDay(start);
-    } else {
-      continue;
-    }
-
-    shifts.push({ name, start, end });
-  }
-
-  shifts.sort((a, b) => a.start.localeCompare(b.start));
+  const shifts = shiftsFromFeed(parseIcs(text));
 
   const cacheControl = force
     ? 'no-store'
