@@ -81,6 +81,7 @@ async function getAccessToken(clientEmail: string, privateKey: string): Promise<
 
 export interface CalendarEvent {
   summary?: string;
+  creator?: { email?: string };
   start: { date?: string; dateTime?: string };
   end: { date?: string; dateTime?: string };
 }
