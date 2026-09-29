@@ -16,6 +16,12 @@ NEXT_PUBLIC_FIREBASE_DB_URL=https://your-project.firebasedatabase.app/
 NEXT_PUBLIC_FIREBASE_DB_PREFIX=dev
 ```
 
+Optionally, to connect hills to Linear projects (see [docs/linear.md](docs/linear.md)):
+
+```
+LINEAR_API_KEY=lin_api_...
+```
+
 Run the dev server:
 
 ```bash
@@ -76,6 +82,7 @@ Environment variables live in Vercel project settings (not GitHub):
 
 - `NEXT_PUBLIC_FIREBASE_DB_URL` — your Firebase RTDB URL
 - `NEXT_PUBLIC_FIREBASE_DB_PREFIX` — `prod` for production; optionally `dev` for preview deployments
+- `LINEAR_API_KEY` — optional; enables [Linear-connected hills](docs/linear.md)
 
 Vercel deploys on push regardless of CI status. To keep failing tests out of
 production, protect `main` in GitHub (Settings → Branches → require the **CI /

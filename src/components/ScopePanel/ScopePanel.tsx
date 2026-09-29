@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Scope } from '@/types';
+import { Scope, ScopeSignal } from '@/types';
 import ScopeCard from './ScopeCard';
 
 interface ScopePanelProps {
   scopes: Scope[];
+  signals?: Record<string, ScopeSignal>;
   onAddScope: (name: string) => void;
   onDeleteScope: (id: string) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
@@ -20,6 +21,7 @@ interface ScopePanelProps {
 
 export default function ScopePanel({
   scopes,
+  signals,
   onAddScope,
   onDeleteScope,
   onReorder,
@@ -125,6 +127,7 @@ export default function ScopePanel({
           <ScopeCard
             key={scope.id}
             scope={scope}
+            signal={signals?.[scope.id]}
             onDelete={onDeleteScope}
             onUpdateName={onUpdateName}
             onUpdateDescription={onUpdateDescription}

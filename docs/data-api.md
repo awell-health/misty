@@ -48,7 +48,8 @@ that and returns plain, order-sorted arrays.
   "hidden": false,
   "goalPosition": 0.5,    // optional target position on the hill
   "completed": false,
-  "completedAt": 1710000000000
+  "completedAt": 1710000000000,
+  "linearLabelId": "uuid" // set on hills connected to Linear; read-only here
 }
 ```
 

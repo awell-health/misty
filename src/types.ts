@@ -9,6 +9,9 @@ export interface Scope {
   goalPosition?: number;
   completed?: boolean;
   completedAt?: number;
+  // Child label inside the hill's Linear label group. Set by the reconciler;
+  // the id is the link, the name is always derived from `name` above.
+  linearLabelId?: string;
 }
 
 export interface TimelineProject {
@@ -20,6 +23,21 @@ export interface TimelineProject {
 }
 
 export type TimelineMode = 'fixed-timeline' | 'fixed-scope';
+
+// A hill connected to a Linear project. Misty owns the label group named here
+// and everything inside it, which is what makes it safe to write to Linear
+// without asking: no human authors labels in that namespace.
+export interface HillLinearConnection {
+  orgSlug: string;        // workspace url key, for building links
+  projectId: string;
+  projectName: string;
+  projectUrl: string;
+  milestoneId?: string;   // optional narrowing to one milestone
+  milestoneName?: string;
+  labelGroupId: string;   // the Misty-owned group
+  goalId?: string;        // timelineProject mirroring the milestone target date
+  connectedAt: number;
+}
 
 export interface Hill {
   id: string;
@@ -33,6 +51,33 @@ export interface Hill {
   completedAt?: number;
   archived?: boolean;
   archivedAt?: number;
+  linear?: HillLinearConnection;
+}
+
+// Read-only evidence pulled from Linear for one scope. Never persisted, and
+// deliberately not a position: the dot on the hill stays a human judgement.
+export interface ScopeSignal {
+  scopeId: string;
+  labelId: string;
+  total: number;
+  completed: number;
+  started: number;
+  unstarted: number; // backlog + unstarted + triage
+  canceled: number;
+  blockedBy: string[]; // names of scopes blocking this one
+  url: string;         // pre-filtered Linear view
+}
+
+export interface HillLinearSignal {
+  configured: boolean;   // false when LINEAR_API_KEY is unset on the server
+  connected: boolean;
+  projectName?: string;
+  projectUrl?: string;
+  milestoneName?: string;
+  targetDate?: number;   // epoch ms, from the milestone (or project) target date
+  scopes: ScopeSignal[];
+  unlabeled: number;     // issues in range carrying no scope label
+  fetchedAt: number;
 }
 
 export type MetricType = 'raw' | 'since';
