@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSignals } from './signal';
 import { Scope } from '@/types';
-import { LinearIssue } from './client';
+import { LinearIssue, nameCandidates, matchesDesiredName } from './client';
 
 function scope(id: string, name: string, labelId?: string): Scope {
   return { id, name, description: '', position: 0, color: '#1a7f37', order: 0, linearLabelId: labelId };
@@ -100,5 +100,26 @@ describe('buildSignals', () => {
       issues: [issue('i1', 'started', ['l2'])],
     });
     expect(scopes.map((s) => s.scopeId)).toEqual(['s1', 's2']);
+  });
+});
+
+describe('nameCandidates', () => {
+  it('tries the plain name first, then qualifies it with the hill', () => {
+    expect(nameCandidates('Platform', 'M2')).toEqual([
+      'Platform', 'Platform (M2)', 'Platform (M2 2)', 'Platform (M2 3)',
+      'Platform (M2 4)', 'Platform (M2 5)',
+    ]);
+  });
+});
+
+describe('matchesDesiredName', () => {
+  it('matches the plain name, ignoring case and surrounding space', () => {
+    expect(matchesDesiredName(' platform ', 'Platform', 'M2')).toBe(true);
+  });
+  it('matches a qualified name', () => {
+    expect(matchesDesiredName('Platform (M2)', 'Platform', 'M2')).toBe(true);
+  });
+  it('does not match a different name', () => {
+    expect(matchesDesiredName('Platform (Other hill)', 'Platform', 'M2')).toBe(false);
   });
 });

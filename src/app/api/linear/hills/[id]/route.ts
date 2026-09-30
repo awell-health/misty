@@ -4,7 +4,7 @@ import { clearHillLinear, getHill, setHillLinear } from '@/lib/api/store';
 import { getOrgSlug, isLinearConfigured, listProjectIssues, listProjects } from '@/lib/linear/client';
 import { buildSignals } from '@/lib/linear/signal';
 import { labelGroupName, syncHill } from '@/lib/linear/apply';
-import { createLabelGroup } from '@/lib/linear/client';
+import { ensureLabelGroup } from '@/lib/linear/client';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -101,10 +101,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       ? project.milestones.find((m) => m.id === body.milestoneId)
       : undefined;
 
+    // Find-or-create: reconnecting a hill whose group is still in Linear must
+    // adopt it, not fail on the duplicate name.
     const group =
       typeof body.labelGroupId === 'string'
         ? { id: body.labelGroupId }
-        : await createLabelGroup(labelGroupName(hill.title));
+        : await ensureLabelGroup(labelGroupName(hill.title));
 
     await setHillLinear(params.id, {
       orgSlug: await getOrgSlug(),

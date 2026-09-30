@@ -86,6 +86,11 @@ Two consequences worth knowing:
   only at connect time — otherwise deleting a scope would resurrect it from its
   own label.
 
+If the stored group id stops resolving — the group was deleted, or the hill was
+disconnected and reconnected — Misty looks the group up by name before creating
+one. Creating blindly would fail forever on the duplicate name, leaving the hill
+permanently unable to sync.
+
 Labels in the group that no scope claims are left alone in steady state. The
 reconciler can't tell a deleted scope from a label someone added by hand, and
 guessing wrong either way is worse than an orphan label sitting there.
@@ -108,6 +113,24 @@ harmless in a gut-check number.
 If the workspace ever allows it, `groupType` in `createLabelGroup()` is the only
 line that has to change — `buildSignals()` already counts an issue under every
 scope label it carries.
+
+**Label names must be unique across the whole workspace.** Not within a group —
+across everything. Linear's own docs say the opposite ("labels in different
+groups, including child labels with the same name, remain separate labels"), and
+the API disagrees: creating a child called `Platform` fails with *"duplicate
+label name"* if any label anywhere in the workspace already has that name,
+grouped or not. Team-scoping the label does not relax it either. Both were
+verified directly against the API.
+
+This matters because scope names are short common words and the workspace
+already owns `Bug`, `Platform`, `Product`, `Now`, `Next`, `Later`, `QA` and
+`Tech Debt`. So a scope's label is created under the plain name where it can be,
+and qualified with the hill where it can't — `Platform` becomes
+`Platform (M2 Registry)`. The reconciler treats either form as correct, so it
+stays a no-op once settled rather than trying to rename back forever.
+
+Two hills with a scope of the same name is the other case this covers: the
+first one gets the plain name, the second gets a qualified one.
 
 **The group is created at workspace level, not team level.** A label's team
 can't be changed after creation, so this is the one irreversible choice here —
