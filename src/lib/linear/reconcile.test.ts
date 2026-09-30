@@ -101,3 +101,36 @@ describe('planReconcile', () => {
     ]);
   });
 });
+
+describe('planReconcile — workspace-wide label name collisions', () => {
+  it('accepts a qualified label name as already correct', () => {
+    // Linear rejected the plain name, so the label was created qualified.
+    // Reconcile must not keep trying to rename it back and failing forever.
+    const actions = planReconcile(
+      [scope({ id: 's1', name: 'Platform', linearLabelId: 'l1' })],
+      [label({ id: 'l1', name: 'Platform (M2 Registry)' })],
+      { qualifier: 'M2 Registry' }
+    );
+    expect(actions).toEqual([]);
+  });
+
+  it('still renames a label that matches neither the plain nor qualified name', () => {
+    const actions = planReconcile(
+      [scope({ id: 's1', name: 'Platform', linearLabelId: 'l1' })],
+      [label({ id: 'l1', name: 'Something else' })],
+      { qualifier: 'M2 Registry' }
+    );
+    expect(actions).toEqual([
+      { kind: 'rename-label', scopeId: 's1', labelId: 'l1', name: 'Platform' },
+    ]);
+  });
+
+  it('links a qualified label to an unlinked scope instead of creating a duplicate', () => {
+    const actions = planReconcile(
+      [scope({ id: 's1', name: 'Platform' })],
+      [label({ id: 'l1', name: 'Platform (M2 Registry)' })],
+      { qualifier: 'M2 Registry' }
+    );
+    expect(actions).toEqual([{ kind: 'link-label', scopeId: 's1', labelId: 'l1' }]);
+  });
+});

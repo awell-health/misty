@@ -1,5 +1,5 @@
 import { Scope } from '@/types';
-import { LinearLabel } from './client';
+import { LinearLabel, matchesDesiredName } from './client';
 
 // Reconciliation, not an event stream. Every trigger recomputes the whole
 // difference between a hill's scopes and its label group, so a write that fails
@@ -22,6 +22,10 @@ export interface ReconcileOptions {
   // On connect only: child labels nobody claims become scopes on the hill.
   // Off in steady state, or deleting a scope would resurrect it from its label.
   adopt?: boolean;
+  // Disambiguates a scope name that collides with another label in the
+  // workspace; the hill title, in practice. A label already carrying a
+  // qualified form of its scope's name counts as correct.
+  qualifier?: string;
 }
 
 function norm(name: string): string {
@@ -48,6 +52,7 @@ export function planReconcile(
   options: ReconcileOptions = {}
 ): ReconcileAction[] {
   const actions: ReconcileAction[] = [];
+  const qualifier = options.qualifier ?? '';
   const byId = new Map(children.map((c) => [c.id, c]));
   const claimed = new Set<string>();
   const names = targetNames(scopes);
@@ -63,7 +68,7 @@ export function planReconcile(
       if (existing.retiredAt) {
         actions.push({ kind: 'restore-label', scopeId: scope.id, labelId: existing.id });
       }
-      if (existing.name !== wanted) {
+      if (!matchesDesiredName(existing.name, wanted, qualifier)) {
         actions.push({ kind: 'rename-label', scopeId: scope.id, labelId: existing.id, name: wanted });
       }
       if (norm(existing.color) !== norm(scope.color)) {
@@ -77,7 +82,7 @@ export function planReconcile(
     // arriving from the other direction, and re-creating it would orphan the
     // issues already tagged with it.
     const match = children.find(
-      (c) => !claimed.has(c.id) && norm(c.name) === norm(wanted)
+      (c) => !claimed.has(c.id) && matchesDesiredName(c.name, wanted, qualifier)
     );
     if (match) {
       claimed.add(match.id);

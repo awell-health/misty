@@ -286,18 +286,34 @@ function clamp01(n: number): number {
 // it learned, and so the data API exposes the same fields the app sees.
 // ---------------------------------------------------------------------------
 
+// Firebase rejects `undefined` outright rather than skipping the key, and
+// HillLinearConnection has three optional fields — a hill connected to a whole
+// project rather than one milestone simply has no milestoneId. Dropping those
+// keys here keeps every caller from having to remember.
+export function stripUndefined<T extends object>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, v]) => v !== undefined)
+  ) as Partial<T>;
+}
+
 export async function setHillLinear(
   hillId: string,
   connection: HillLinearConnection
 ): Promise<void> {
-  await set(ref(getFirebaseDb(), dbPath(`hills/${hillId}/linear`)), connection);
+  await set(
+    ref(getFirebaseDb(), dbPath(`hills/${hillId}/linear`)),
+    stripUndefined(connection)
+  );
 }
 
 export async function updateHillLinear(
   hillId: string,
   updates: Partial<HillLinearConnection>
 ): Promise<void> {
-  await update(ref(getFirebaseDb(), dbPath(`hills/${hillId}/linear`)), updates);
+  await update(
+    ref(getFirebaseDb(), dbPath(`hills/${hillId}/linear`)),
+    stripUndefined(updates)
+  );
 }
 
 // Disconnecting leaves Linear untouched — the group and its labels stay exactly

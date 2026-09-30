@@ -252,6 +252,70 @@ const CREATE_LABEL = `
   }
 `;
 
+// Linear enforces label-name uniqueness across the ENTIRE workspace, not within
+// a group — a child called "Platform" collides with any existing label of that
+// name, grouped or not. (Linear's own docs say the opposite; the API is the one
+// that decides.) Scope names are short common words, so this is hit often:
+// try the plain name first, then qualify it with the hill.
+export function nameCandidates(name: string, qualifier: string): string[] {
+  return [
+    name,
+    `${name} (${qualifier})`,
+    ...[2, 3, 4, 5].map((n) => `${name} (${qualifier} ${n})`),
+  ];
+}
+
+// A label already named one of its own candidates is correct as it stands, so
+// reconcile must not keep trying to rename it back to the plain form.
+export function matchesDesiredName(actual: string, name: string, qualifier: string): boolean {
+  return nameCandidates(name, qualifier).some(
+    (c) => c.toLowerCase() === actual.trim().toLowerCase()
+  );
+}
+
+function isDuplicateName(e: unknown): boolean {
+  return e instanceof Error && /duplicate label name/i.test(e.message);
+}
+
+async function withUniqueName<T>(
+  candidates: string[],
+  attempt: (name: string) => Promise<T>
+): Promise<T> {
+  let lastError: unknown = new LinearError('No candidate label name available');
+  for (const candidate of candidates) {
+    try {
+      return await attempt(candidate);
+    } catch (e) {
+      if (!isDuplicateName(e)) throw e;
+      lastError = e;
+    }
+  }
+  throw lastError;
+}
+
+const FIND_GROUP_QUERY = `
+  query MistyFindLabelGroup($name: String!) {
+    issueLabels(first: 10, filter: { name: { eq: $name }, isGroup: { eq: true } }) {
+      nodes { id name color retiredAt }
+    }
+  }
+`;
+
+export async function findLabelGroupByName(name: string): Promise<LinearLabel | null> {
+  const data: any = await linearRequest(FIND_GROUP_QUERY, { name });
+  const node = data.issueLabels.nodes[0];
+  return node ? normalizeLabel(node) : null;
+}
+
+// Find-or-create, because a group with this hill's name may well already exist:
+// disconnecting leaves it behind, so reconnecting would otherwise fail forever
+// with "duplicate label name", and so would rebuilding after the stored id went
+// stale. Adopting the existing group is also the better outcome — every issue
+// already tagged from it keeps counting.
+export async function ensureLabelGroup(name: string): Promise<LinearLabel> {
+  return (await findLabelGroupByName(name)) ?? createLabelGroup(name);
+}
+
 // Groups are created at workspace level on purpose. A label's team can't be
 // changed after creation, so the irreversible choice is made the way that
 // can't box us in when a project later spans teams.
@@ -278,12 +342,26 @@ export async function createLabelGroup(name: string): Promise<LinearLabel> {
 export async function createChildLabel(
   parentId: string,
   name: string,
-  color: string
+  color: string,
+  qualifier: string
 ): Promise<LinearLabel> {
-  const data: any = await linearRequest(CREATE_LABEL, {
-    input: { name, color, parentId },
+  return withUniqueName(nameCandidates(name, qualifier), async (candidate) => {
+    const data: any = await linearRequest(CREATE_LABEL, {
+      input: { name: candidate, color, parentId },
+    });
+    return normalizeLabel(data.issueLabelCreate.issueLabel);
   });
-  return normalizeLabel(data.issueLabelCreate.issueLabel);
+}
+
+// Renaming hits the same uniqueness rule as creating.
+export async function renameLabel(
+  id: string,
+  name: string,
+  qualifier: string
+): Promise<LinearLabel> {
+  return withUniqueName(nameCandidates(name, qualifier), (candidate) =>
+    updateLabel(id, { name: candidate })
+  );
 }
 
 const UPDATE_LABEL = `

@@ -2,9 +2,10 @@ import { SerializedHill, createScope, getHill, setScopeLabelId, updateHillLinear
 import { planReconcile, ReconcileOptions } from './reconcile';
 import {
   createChildLabel,
-  createLabelGroup,
+  ensureLabelGroup,
   getLabelGroup,
   getProject,
+  renameLabel,
   restoreLabel,
   updateLabel,
 } from './client';
@@ -29,18 +30,24 @@ export async function syncHill(hillId: string, options: ReconcileOptions = {}): 
 
   let group = await getLabelGroup(hill.linear.labelGroupId);
 
-  // The group was deleted in Linear. Rebuild it and let the plan re-create the
-  // children, rather than leaving the hill permanently half-connected.
+  // The stored id no longer resolves — the group was deleted, or the id went
+  // stale. Re-find it by name before creating one, or a group that still exists
+  // would leave this hill failing on "duplicate label name" on every sync.
   if (!group) {
-    const fresh = await createLabelGroup(labelGroupName(hill.title));
+    const fresh = await ensureLabelGroup(labelGroupName(hill.title));
     await updateHillLinear(hillId, { labelGroupId: fresh.id });
     hill.linear.labelGroupId = fresh.id;
-    group = { id: fresh.id, name: fresh.name, children: [] };
+    // Re-read rather than assuming empty: an adopted group has children, and
+    // the plan needs them to link scopes instead of creating duplicates.
+    group = (await getLabelGroup(fresh.id)) ?? { id: fresh.id, name: fresh.name, children: [] };
   } else if (group.name !== labelGroupName(hill.title)) {
     await updateLabel(group.id, { name: labelGroupName(hill.title) });
   }
 
-  const actions = planReconcile(hill.scopes, group.children, options);
+  const actions = planReconcile(hill.scopes, group.children, {
+    ...options,
+    qualifier: hill.title,
+  });
   const errors: string[] = [];
   let applied = 0;
 
@@ -48,7 +55,7 @@ export async function syncHill(hillId: string, options: ReconcileOptions = {}): 
     try {
       switch (action.kind) {
         case 'create-label': {
-          const label = await createChildLabel(group.id, action.name, action.color);
+          const label = await createChildLabel(group.id, action.name, action.color, hill.title);
           await setScopeLabelId(hillId, action.scopeId, label.id);
           break;
         }
@@ -56,7 +63,7 @@ export async function syncHill(hillId: string, options: ReconcileOptions = {}): 
           await setScopeLabelId(hillId, action.scopeId, action.labelId);
           break;
         case 'rename-label':
-          await updateLabel(action.labelId, { name: action.name });
+          await renameLabel(action.labelId, action.name, hill.title);
           break;
         case 'recolor-label':
           await updateLabel(action.labelId, { color: action.color });
