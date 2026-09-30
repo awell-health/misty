@@ -2,11 +2,14 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useState, useCallback, useMemo } from 'react';
+import { ScopeSignal } from '@/types';
 import { useHills } from '@/context/HillsContext';
 import { usePresence } from '@/lib/usePresence';
+import { useLinearSignal } from '@/lib/useLinearSignal';
 import { consumeNavigatedFromIndex } from '@/lib/hillNav';
 import HillDescription from '@/components/HillDescription/HillDescription';
 import ScopePanel from '@/components/ScopePanel/ScopePanel';
+import HillLinearPanel from '@/components/HillLinear/HillLinearPanel';
 import HillChart from '@/components/HillChart/HillChart';
 import HillTimeline from '@/components/HillTimeline/HillTimeline';
 import PotOfGold from '@/components/PotOfGold/PotOfGold';
@@ -53,6 +56,14 @@ export default function HillPage() {
 
   const hill = getHill(id);
   const presenceUsers = usePresence(id);
+  const { signal: linearSignal, refreshing: linearRefreshing, error: linearError, refresh: refreshLinear } = useLinearSignal(id);
+
+  // Signals keyed by scope id so ScopePanel can hand each card its own.
+  const scopeSignals = useMemo(() => {
+    const map: Record<string, ScopeSignal> = {};
+    linearSignal?.scopes.forEach((s) => { map[s.scopeId] = s; });
+    return map;
+  }, [linearSignal]);
 
   const handleTitleChange = useCallback(
     (title: string) => updateHill(id, { title }),
@@ -258,8 +269,17 @@ export default function HillPage() {
           onDescriptionChange={handleDescriptionChange}
           presenceUsers={presenceUsers}
         />
+        <HillLinearPanel
+          hillId={id}
+          connection={hill.linear}
+          signal={linearSignal}
+          refreshing={linearRefreshing}
+          error={linearError}
+          onRefresh={refreshLinear}
+        />
         <ScopePanel
           scopes={activeScopes}
+          signals={scopeSignals}
           onAddScope={handleAddScope}
           onDeleteScope={handleDeleteScope}
           onReorder={handleReorder}

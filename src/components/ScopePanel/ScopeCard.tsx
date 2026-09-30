@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Scope, SCOPE_COLORS } from '@/types';
+import { Scope, ScopeSignal, SCOPE_COLORS } from '@/types';
 
 interface ScopeCardProps {
   scope: Scope;
+  signal?: ScopeSignal;
   onDelete: (id: string) => void;
   onUpdateName: (scopeId: string, name: string) => void;
   onUpdateDescription: (scopeId: string, description: string) => void;
@@ -25,6 +26,7 @@ interface ScopeCardProps {
 
 export default function ScopeCard({
   scope,
+  signal,
   onDelete,
   onUpdateName,
   onUpdateDescription,
@@ -236,6 +238,24 @@ export default function ScopeCard({
           )}
         </div>
       </div>
+      {signal && signal.total > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap mt-1.5 pl-6 text-[11px] text-fg-muted">
+          <a
+            className="text-fg-muted no-underline hover:text-fg-accent hover:underline"
+            href={signal.url}
+            target="_blank"
+            rel="noreferrer"
+            title="Open these issues in Linear"
+          >
+            {signal.total} {signal.total === 1 ? 'issue' : 'issues'} &#8599;
+          </a>
+          {signal.completed > 0 && <span>&middot; {signal.completed} done</span>}
+          {signal.started > 0 && <span>&middot; {signal.started} in progress</span>}
+          {signal.blockedBy.length > 0 && (
+            <span className="text-fg-danger">&middot; blocked by {signal.blockedBy.join(', ')}</span>
+          )}
+        </div>
+      )}
       {expanded && (
         <textarea
           className="mt-2 w-full p-2 border border-border-muted rounded-sm font-family-system text-xs leading-relaxed resize-y outline-none text-fg-default focus:border-fg-accent focus:shadow-[0_0_0_3px_var(--bg-accent-subtle)] placeholder:text-fg-muted"

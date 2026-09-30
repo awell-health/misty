@@ -1,6 +1,6 @@
 import { ref, get, set, update, remove } from 'firebase/database';
 import { getFirebaseDb, getDbPrefix } from '@/lib/firebase';
-import { Scope, TimelineProject, Hill, SCOPE_COLORS } from '@/types';
+import { Scope, TimelineProject, Hill, HillLinearConnection, SCOPE_COLORS } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Path helpers
@@ -29,6 +29,7 @@ function serializeScope(id: string, s: any): Scope {
     goalPosition: s.goalPosition ?? undefined,
     completed: s.completed ?? false,
     completedAt: s.completedAt ?? undefined,
+    linearLabelId: s.linearLabelId ?? undefined,
   };
 }
 
@@ -77,6 +78,7 @@ function serializeHill(id: string, val: any): SerializedHill {
     completedAt: val.completedAt ?? undefined,
     archived: val.archived ?? false,
     archivedAt: val.archivedAt ?? undefined,
+    linear: val.linear ?? undefined,
     scopes: serializeScopes(val.scopes),
     goals: serializeGoals(val.timelineProjects),
   };
@@ -129,6 +131,7 @@ export interface CreateScopeInput {
   color?: string;
   goalPosition?: number;
   hidden?: boolean;
+  linearLabelId?: string;
 }
 
 // Fields a client may PATCH. `completedAt` is derived from `completed`.
@@ -161,6 +164,7 @@ export async function createScope(
   };
   if (input.goalPosition !== undefined) data.goalPosition = clamp01(input.goalPosition);
   if (input.hidden !== undefined) data.hidden = input.hidden;
+  if (input.linearLabelId !== undefined) data.linearLabelId = input.linearLabelId;
 
   await set(ref(getFirebaseDb(), dbPath(`hills/${hillId}/scopes/${id}`)), data);
   return serializeScope(id, data);
@@ -273,4 +277,68 @@ export async function deleteGoal(hillId: string, goalId: string): Promise<boolea
 
 function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
+}
+
+// ---------------------------------------------------------------------------
+// Linear connection
+//
+// Kept beside the other writes so the reconciler has one place to persist what
+// it learned, and so the data API exposes the same fields the app sees.
+// ---------------------------------------------------------------------------
+
+export async function setHillLinear(
+  hillId: string,
+  connection: HillLinearConnection
+): Promise<void> {
+  await set(ref(getFirebaseDb(), dbPath(`hills/${hillId}/linear`)), connection);
+}
+
+export async function updateHillLinear(
+  hillId: string,
+  updates: Partial<HillLinearConnection>
+): Promise<void> {
+  await update(ref(getFirebaseDb(), dbPath(`hills/${hillId}/linear`)), updates);
+}
+
+// Disconnecting leaves Linear untouched — the group and its labels stay exactly
+// as they are, and only Misty's side of the link is dropped.
+export async function clearHillLinear(hillId: string): Promise<void> {
+  const scopes = await listScopes(hillId);
+  const updates: Record<string, any> = { [dbPath(`hills/${hillId}/linear`)]: null };
+  for (const scope of scopes ?? []) {
+    if (scope.linearLabelId) {
+      updates[dbPath(`hills/${hillId}/scopes/${scope.id}/linearLabelId`)] = null;
+    }
+  }
+  await update(ref(getFirebaseDb()), updates);
+}
+
+export async function setScopeLabelId(
+  hillId: string,
+  scopeId: string,
+  labelId: string
+): Promise<void> {
+  await update(ref(getFirebaseDb(), dbPath(`hills/${hillId}/scopes/${scopeId}`)), {
+    linearLabelId: labelId,
+  });
+}
+
+// A milestone's target date is a fact rather than a judgement, so it is the one
+// thing Misty mirrors onto the hill itself — as a goal on the timeline.
+export async function upsertMilestoneGoal(
+  hillId: string,
+  name: string,
+  dateMs: number,
+  existingGoalId?: string
+): Promise<string> {
+  if (existingGoalId) {
+    const goalRef = ref(getFirebaseDb(), dbPath(`hills/${hillId}/timelineProjects/${existingGoalId}`));
+    const snap = await get(goalRef);
+    if (snap.exists()) {
+      await update(goalRef, { name, date: dateMs });
+      return existingGoalId;
+    }
+  }
+  const goal = await createGoal(hillId, { name, date: dateMs });
+  return goal!.id;
 }

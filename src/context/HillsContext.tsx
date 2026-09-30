@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, Re
 import { ref, onValue, set, update, remove, get } from 'firebase/database';
 import { getFirebaseDb, getDbPrefix } from '@/lib/firebase';
 import { Hill, Scope, TimelineProject, TimelineMode, SCOPE_COLORS, OOOSettings, DEFAULT_OOO_SETTINGS, Metric, METRIC_IDS, DEFAULT_METRICS } from '@/types';
+import { moveScopeLabel, retireScopeLabel, syncHillLabels } from '@/lib/linear/sync';
 
 type UndoAction = { undo: () => void; redo: () => void };
 
@@ -67,6 +68,7 @@ function snapshotToHills(data: Record<string, any> | null): Hill[] {
         goalPosition: s.goalPosition ?? undefined,
         completed: s.completed ?? false,
         completedAt: s.completedAt ?? undefined,
+        linearLabelId: s.linearLabelId ?? undefined,
       }))
       .sort((a, b) => a.order - b.order);
     const timelineProjectsMap = val.timelineProjects || {};
@@ -94,6 +96,7 @@ function snapshotToHills(data: Record<string, any> | null): Hill[] {
       completedAt: val.completedAt ?? undefined,
       archived: val.archived ?? false,
       archivedAt: val.archivedAt ?? undefined,
+      linear: val.linear ?? undefined,
     };
   }).sort((a, b) => a.order - b.order);
 }
@@ -203,6 +206,36 @@ export function HillsProvider({ children }: { children: ReactNode }) {
     });
     return () => unsubscribe();
   }, []);
+
+  // Reconcile connected hills whenever their scopes change shape. Watching a
+  // signature rather than hooking every mutation means undo, the data API and
+  // another browser's edits all trigger a sync too. The first snapshot only
+  // records the baseline: a burst of requests on load would buy nothing, and
+  // the hill page reconciles its own hill when it opens.
+  const linearSignatures = useRef<Map<string, string> | null>(null);
+  useEffect(() => {
+    const signatures = new Map<string, string>();
+    for (const hill of hills) {
+      if (!hill.linear) continue;
+      signatures.set(
+        hill.id,
+        [hill.title, ...hill.scopes.map((s) => `${s.id}:${s.name}:${s.color}:${s.linearLabelId ?? ''}`)].join('|')
+      );
+    }
+
+    const previous = linearSignatures.current;
+    linearSignatures.current = signatures;
+    if (!previous) return;
+
+    const changed = [...signatures].filter(([id, sig]) => previous.get(id) !== sig);
+    if (changed.length === 0) return;
+
+    // Debounced: scope names are typed a character at a time.
+    const timer = setTimeout(() => {
+      changed.forEach(([id]) => syncHillLabels(id));
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [hills]);
 
   const updateOOOSettings = useCallback((updates: Partial<OOOSettings>) => {
     const db = getFirebaseDb();
@@ -399,6 +432,10 @@ export function HillsProvider({ children }: { children: ReactNode }) {
     get(scopeRef).then((snapshot) => {
       const data = snapshot.val();
       remove(scopeRef);
+      // Retire rather than delete the label, so the issues already tagged with
+      // it keep their history. Undo restores the scope, and the next reconcile
+      // restores this same label rather than making a new one.
+      if (data?.linearLabelId) retireScopeLabel(hillId, data.linearLabelId);
       pushUndo({
         undo: () => set(ref(getFirebaseDb(), dbPath(`hills/${hillId}/scopes/${scopeId}`)), data),
         redo: () => remove(ref(getFirebaseDb(), dbPath(`hills/${hillId}/scopes/${scopeId}`))),
@@ -425,6 +462,7 @@ export function HillsProvider({ children }: { children: ReactNode }) {
         goalPosition: scope.goalPosition ?? null,
         completed: scope.completed ?? false,
         completedAt: scope.completedAt ?? null,
+        linearLabelId: scope.linearLabelId ?? null,
       };
       const movedData = { ...common, order: maxOrder + 1 };
       const originalData = { ...common, order: scope.order };
@@ -433,6 +471,9 @@ export function HillsProvider({ children }: { children: ReactNode }) {
       const toPath = dbPath(`hills/${toHillId}/scopes/${newId}`);
       const doMove: Record<string, any> = { [fromPath]: null, [toPath]: movedData };
       update(ref(db), doMove);
+      // Reparent the label into the target hill's group so every issue already
+      // tagged with it follows the scope.
+      if (scope.linearLabelId) moveScopeLabel(fromHillId, toHillId, scope.linearLabelId);
       pushUndo({
         undo: () => update(ref(getFirebaseDb()), { [toPath]: null, [fromPath]: originalData }),
         redo: () => update(ref(getFirebaseDb()), doMove),
