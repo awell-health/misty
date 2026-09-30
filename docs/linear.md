@@ -92,12 +92,22 @@ guessing wrong either way is worse than an orphan label sitting there.
 
 ## Choices worth knowing about
 
-**The group is multi-select.** Linear groups can be single- or multi-select. The
-failure mode of single-select is silent: someone with a genuinely cross-cutting
-ticket can't tag both scopes, so they tag one arbitrarily or neither, and the
-signal quietly degrades. Multi-select double-counts that ticket instead, which
-is visible and harmless in a gut-check number. One field in
-`createLabelGroup()` to reverse.
+**The group is single-select, because multi-select doesn't work here.** Linear's
+GraphQL schema exposes a `multiSelect` group type, but this workspace rejects it
+outright — `issueLabelCreate` fails with *"multi-select issue label groups
+disabled"* and no group is created. Linear's own help docs agree with the
+workspace and not the schema: they state that only one label per group can be
+applied to an issue.
+
+Multi-select would be the better choice if it were available. Single-select
+fails silently: someone with a genuinely cross-cutting ticket can't tag both
+scopes, so they tag one arbitrarily or neither, and the signal quietly degrades.
+Multi-select would double-count that ticket instead, which is visible and
+harmless in a gut-check number.
+
+If the workspace ever allows it, `groupType` in `createLabelGroup()` is the only
+line that has to change — `buildSignals()` already counts an issue under every
+scope label it carries.
 
 **The group is created at workspace level, not team level.** A label's team
 can't be changed after creation, so this is the one irreversible choice here —
