@@ -33,6 +33,10 @@ export default function HillLinearPanel({
   const [projectId, setProjectId] = useState('');
   const [milestoneId, setMilestoneId] = useState('');
   const [busy, setBusy] = useState(false);
+  // Connect writes to Linear and can fail for reasons only Linear knows (a
+  // rejected label group, a revoked key). Swallowing that left people staring
+  // at a button that did nothing, so the message goes on screen verbatim.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -47,23 +51,41 @@ export default function HillLinearPanel({
 
   const openPicker = useCallback(async () => {
     setPicking(true);
+    setActionError(null);
     if (projects) return;
-    const res = await fetch('/api/linear/projects');
-    const json = await res.json();
-    setProjects(json.projects ?? []);
+    try {
+      const res = await fetch('/api/linear/projects');
+      const json = await res.json();
+      if (json.error) setActionError(json.error);
+      setProjects(json.projects ?? []);
+    } catch (e) {
+      setProjects([]);
+      setActionError(e instanceof Error ? e.message : 'Could not reach Linear');
+    }
   }, [projects]);
 
   const connect = useCallback(async () => {
     if (!projectId) return;
     setBusy(true);
+    setActionError(null);
     try {
-      await fetch(`/api/linear/hills/${hillId}`, {
+      const res = await fetch(`/api/linear/hills/${hillId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId, milestoneId: milestoneId || undefined }),
       });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActionError(json.error ?? `Connect failed (HTTP ${res.status})`);
+        return; // Keep the picker open so the choice isn't lost on a retry.
+      }
+      // A connect can succeed and still have had actions fail against Linear;
+      // the next reconcile retries them, but say so rather than look clean.
+      if (json.errors?.length) setActionError(json.errors[0]);
       setPicking(false);
       onRefresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not reach Linear');
     } finally {
       setBusy(false);
     }
@@ -71,10 +93,18 @@ export default function HillLinearPanel({
 
   const disconnect = useCallback(async () => {
     setBusy(true);
+    setActionError(null);
     try {
-      await fetch(`/api/linear/hills/${hillId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/linear/hills/${hillId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setActionError(json.error ?? `Disconnect failed (HTTP ${res.status})`);
+        return;
+      }
       setMenuOpen(false);
       onRefresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not reach Linear');
     } finally {
       setBusy(false);
     }
@@ -121,6 +151,9 @@ export default function HillLinearPanel({
               inside it. Tag tickets with those labels to see them here. Nothing else in Linear
               is touched.
             </p>
+            {actionError && (
+              <p className="text-xs text-fg-danger leading-relaxed">{actionError}</p>
+            )}
             <div className="flex gap-2">
               <button
                 className="py-1.5 px-3 bg-bg-success-emphasis text-fg-on-emphasis border-none rounded-md text-sm font-medium cursor-pointer disabled:opacity-50 hover:opacity-90"
@@ -138,12 +171,15 @@ export default function HillLinearPanel({
             </div>
           </div>
         ) : (
-          <button
-            className="text-xs text-fg-muted bg-none border-none cursor-pointer p-0 hover:text-fg-accent"
-            onClick={openPicker}
-          >
-            + Connect to Linear
-          </button>
+          <div className="flex flex-col gap-1">
+            <button
+              className="text-xs text-fg-muted bg-none border-none cursor-pointer p-0 text-left hover:text-fg-accent"
+              onClick={openPicker}
+            >
+              + Connect to Linear
+            </button>
+            {actionError && <p className="text-xs text-fg-danger">{actionError}</p>}
+          </div>
         )}
       </div>
     );
@@ -167,7 +203,11 @@ export default function HillLinearPanel({
           : connection.projectName}
       </a>
       {targetDate && <span className="shrink-0">due {targetDate}</span>}
-      {error && <span className="text-fg-danger shrink-0" title={error}>unavailable</span>}
+      {(actionError || error) && (
+        <span className="text-fg-danger shrink-0 truncate" title={actionError ?? error ?? ''}>
+          {actionError ?? 'unavailable'}
+        </span>
+      )}
       <div className="relative ml-auto shrink-0" ref={menuRef}>
         <button
           className="bg-none border-none text-fg-muted cursor-pointer p-1 rounded-sm hover:text-fg-default hover:bg-bg-muted"

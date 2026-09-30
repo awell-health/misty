@@ -260,10 +260,15 @@ export async function createLabelGroup(name: string): Promise<LinearLabel> {
     input: {
       name,
       isGroup: true,
-      // Multi-select: a ticket that genuinely serves two scopes should be able
-      // to say so. Double counting in a gut-check signal is visible and
-      // harmless; silent under-tagging is neither.
-      groupType: 'multiSelect',
+      // Single-select is not a preference, it is the only thing that works:
+      // this workspace rejects the alternative with "multi-select issue label
+      // groups disabled", and the create fails outright. Multi-select would be
+      // better — a ticket serving two scopes could say so, and double counting
+      // in a gut-check number is visible and harmless where silent
+      // under-tagging is not. buildSignals() already counts an issue under
+      // every scope label it carries, so if the workspace ever allows it this
+      // is the only line that has to change.
+      groupType: 'singleSelect',
       description: 'Managed by Misty — one label per hill scope.',
     },
   });
