@@ -10,13 +10,22 @@ export function shiftsFromFeed(events: IcsEvent[], now = new Date()): OnCallShif
   return events
     .filter((event) => event.end > now)
     .map((event) => {
-      const start = dateInZone(event.start);
-      // end is exclusive: a shift handing over at 9am still covers that day,
-      // so only a handover at exactly local midnight ends on the prior day.
-      const endDay = dateInZone(event.end);
-      const end = zonedMidnight(endDay).getTime() === event.end.getTime() ? endDay : addOneDay(endDay);
+      const start = nearestDayStart(event.start);
+      // end is exclusive. A shift shorter than half a day still shows as one.
+      const roundedEnd = nearestDayStart(event.end);
+      const end = roundedEnd > start ? roundedEnd : addOneDay(start);
       const name = event.summary.replace(/\s+on-call for .*$/i, '').trim() || 'On call';
       return { name, start, end };
     })
     .sort((a, b) => a.start.localeCompare(b.start));
+}
+
+// The local day boundary nearest to a handover, so the handover day goes to
+// whoever holds most of it: a 6pm handover keeps that day with the outgoing
+// person, a 9am one gives it to the incoming person. Both sides of a handover
+// round the same instant, so consecutive shifts never overlap.
+function nearestDayStart(instant: Date): string {
+  const day = dateInZone(instant);
+  const sinceMidnight = instant.getTime() - zonedMidnight(day).getTime();
+  return sinceMidnight >= 12 * 60 * 60 * 1000 ? addOneDay(day) : day;
 }

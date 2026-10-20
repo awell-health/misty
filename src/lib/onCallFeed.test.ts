@@ -57,13 +57,35 @@ describe('timezone helpers', () => {
 describe('shiftsFromFeed', () => {
   const now = new Date('2026-09-23T12:00:00Z');
 
-  it('strips the "on-call for" suffix and uses Denver days', () => {
+  it('strips the "on-call for" suffix and rounds handovers to the nearest Denver midnight', () => {
     expect(shiftsFromFeed(parseIcs(FEED), now)).toEqual([
-      // Hands over at 9am on Oct 5, so Oct 5 is still covered (end exclusive).
-      { name: 'Mike Pack', start: '2026-09-21', end: '2026-10-06' },
+      // Starts 11:35am Sep 21, so Sep 21 is his; hands over 9am Oct 5, so Oct 5 isn't.
+      { name: 'Mike Pack', start: '2026-09-21', end: '2026-10-05' },
       // Ends at local midnight starting Oct 12, so Oct 11 is the last day.
       { name: 'Thomas', start: '2026-10-05', end: '2026-10-12' },
     ]);
+  });
+
+  it("doesn't overlap consecutive shifts that hand over in the evening", () => {
+    // The real Triage Captain rota: Saturday 6pm Denver handovers.
+    const feed = [
+      'BEGIN:VEVENT', 'SUMMARY:Mike Pack on-call for Triage Captain',
+      'DTSTART:20261025T000000Z', 'DTEND:20261101T000000Z', 'END:VEVENT',
+      'BEGIN:VEVENT', 'SUMMARY:Thomas on-call for Triage Captain',
+      'DTSTART:20261101T000000Z', 'DTEND:20261108T010000Z', 'END:VEVENT',
+    ].join('\n');
+    expect(shiftsFromFeed(parseIcs(feed), now)).toEqual([
+      // Sat Oct 24 6pm → Sat Oct 31 6pm: the evening of the 24th is too little
+      // to count, the 31st is mostly his.
+      { name: 'Mike Pack', start: '2026-10-25', end: '2026-11-01' },
+      // Sat Oct 31 6pm → Sat Nov 7 6pm (MST after the clocks change).
+      { name: 'Thomas', start: '2026-11-01', end: '2026-11-08' },
+    ]);
+  });
+
+  it('still shows a short shift as one day', () => {
+    const feed = 'BEGIN:VEVENT\nSUMMARY:Thomas on-call for Triage Captain\nDTSTART:20261001T160000Z\nDTEND:20261001T200000Z\nEND:VEVENT';
+    expect(shiftsFromFeed(parseIcs(feed), now)).toEqual([{ name: 'Thomas', start: '2026-10-01', end: '2026-10-02' }]);
   });
 
   it('drops shifts that already ended', () => {
