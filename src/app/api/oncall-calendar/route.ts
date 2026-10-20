@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 // The Triage Captain schedule comes from incident.io's iCal feed. The feed URL
 // embeds its own access token, so it lives in the environment, not the code.
 export async function GET(request: NextRequest) {
-  const feedUrl = process.env.ONCALL_FEED_URL;
+  const feedUrl = process.env.TRIAGE_CAPTAIN_FEED_URL;
 
   if (!feedUrl) {
     return NextResponse.json({ shifts: [] });

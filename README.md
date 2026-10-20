@@ -80,7 +80,7 @@ Environment variables live in Vercel project settings (not GitHub):
 Calendar and incident.io integration (all server-only):
 
 - `GOOGLE_SERVICE_ACCOUNT_JSON`, `OOO_CALENDAR_ID` — the OOO Google Calendar
-- `ONCALL_FEED_URL` — incident.io iCal feed for the Triage Captain schedule
+- `TRIAGE_CAPTAIN_FEED_URL` — incident.io iCal feed for the Triage Captain schedule
 - `INCIDENT_IO_API_KEY`, `CRON_SECRET` — the hourly `/api/ooo-sync` cron,
   which overrides OOO engineers to nobody on their personal online schedules:
   every incident.io schedule they're on except the on-call rotas listed in
