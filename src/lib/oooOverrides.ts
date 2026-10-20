@@ -7,8 +7,8 @@
 // no longer appear there, so re-running the sync never duplicates an override.
 
 import type { CalendarEvent } from './googleCalendar';
-import type { Rotation, ScheduleEntry } from './incidentIo';
-import { zonedMidnight } from './timezone';
+import type { Rotation, Schedule, ScheduleEntry } from './incidentIo';
+import { TEAM_TIMEZONE, zonedMidnight } from './timezone';
 
 export interface OOOWindow {
   email: string;
@@ -25,9 +25,10 @@ export interface PlannedOverride {
 }
 
 // People are identified by who created the OOO event (e.g. "MP OOO" created
-// by mike@awellhealth.com). All-day events cover whole Denver days; timed
-// events cover exactly their hours.
-export function oooWindows(events: CalendarEvent[]): OOOWindow[] {
+// by mike@awellhealth.com). All-day events cover whole days in `timeZone`,
+// which should be the person's own (their online schedule's); timed events
+// cover exactly their hours.
+export function oooWindows(events: CalendarEvent[], timeZone = TEAM_TIMEZONE): OOOWindow[] {
   const windows: OOOWindow[] = [];
   for (const event of events) {
     const email = event.creator?.email?.toLowerCase();
@@ -36,8 +37,8 @@ export function oooWindows(events: CalendarEvent[]): OOOWindow[] {
     let start: Date;
     let end: Date;
     if (event.start.date && event.end.date) {
-      start = zonedMidnight(event.start.date);
-      end = zonedMidnight(event.end.date);
+      start = zonedMidnight(event.start.date, timeZone);
+      end = zonedMidnight(event.end.date, timeZone);
     } else if (event.start.dateTime && event.end.dateTime) {
       start = new Date(event.start.dateTime);
       end = new Date(event.end.dateTime);
@@ -65,6 +66,23 @@ function mergeWindows(windows: OOOWindow[]): OOOWindow[] {
     }
   }
   return merged;
+}
+
+// On-call rotas, which must never be overridden to nobody: an OOO day there
+// would leave pages reaching no one. Every other schedule an OOO person is on
+// is treated as their online schedule, so a new on-call rota belongs here.
+export const EXCLUDED_SCHEDULE_IDS = new Set([
+  '01M32GTH9ATJQ8X96K4C2BWYWG', // Triage Captain
+]);
+
+// The schedules worth checking: any non-excluded schedule with an OOO person
+// in one of its rotations (any version; planOverrides works from actual shifts).
+export function onlineSchedulesFor(schedules: Schedule[], oooEmails: Set<string>): Schedule[] {
+  return schedules.filter(
+    (s) =>
+      !EXCLUDED_SCHEDULE_IDS.has(s.id) &&
+      s.config.rotations.some((r) => r.users?.some((u) => oooEmails.has(u.email?.toLowerCase() ?? '')))
+  );
 }
 
 export interface SkippedEntry {

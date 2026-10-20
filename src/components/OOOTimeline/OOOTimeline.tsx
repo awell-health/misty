@@ -39,7 +39,7 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
 }
 
 export default function OOOTimeline({ settings, onUpdateSettings }: OOOTimelineProps) {
-  const { data, loading, refreshing, refresh } = useOOOCalendar();
+  const { data, loading, refreshing, refresh, syncStatus } = useOOOCalendar();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -281,6 +281,11 @@ export default function OOOTimeline({ settings, onUpdateSettings }: OOOTimelineP
                     <RefreshIcon spinning={refreshing} />
                     {refreshing ? 'Refreshing…' : 'Refresh calendar'}
                   </button>
+                  {syncStatus && !refreshing && (
+                    <div style={{ fontSize: '10px', color: 'var(--fg-muted)', lineHeight: 1.4 }}>
+                      {syncStatus}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

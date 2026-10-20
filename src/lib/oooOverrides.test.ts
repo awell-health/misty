@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { oooWindows, planOverrides } from './oooOverrides';
-import type { Rotation, ScheduleEntry } from './incidentIo';
+import { onlineSchedulesFor, oooWindows, planOverrides } from './oooOverrides';
+import type { Rotation, Schedule, ScheduleEntry } from './incidentIo';
 
 const now = new Date('2026-09-23T12:00:00Z');
 
@@ -23,6 +23,16 @@ describe('oooWindows', () => {
     expect(w.email).toBe('mike@awellhealth.com');
     expect(w.start.toISOString()).toBe('2026-10-01T06:00:00.000Z');
     expect(w.end.toISOString()).toBe('2026-10-03T06:00:00.000Z');
+  });
+
+  it("reads all-day events as whole days in the person's own timezone", () => {
+    const [w] = oooWindows(
+      [{ creator: { email: 'thomas@awellhealth.com' }, start: { date: '2026-10-22' }, end: { date: '2026-10-24' } }],
+      'Asia/Tokyo'
+    );
+    // Thu–Fri in Tokyo, so his whole Thursday 9–5 shift (00:00–08:00 UTC) is covered.
+    expect(w.start.toISOString()).toBe('2026-10-21T15:00:00.000Z');
+    expect(w.end.toISOString()).toBe('2026-10-23T15:00:00.000Z');
   });
 
   it('keeps timed events to their hours', () => {
@@ -118,5 +128,28 @@ describe('planOverrides', () => {
     ]);
     const entries = [entry('mike@awellhealth.com', '2026-09-21T15:00:00Z', '2026-09-28T15:00:00Z')];
     expect(planOverrides([today], entries, mikeRotations, now).planned[0].start_at).toBe(now.toISOString());
+  });
+});
+
+describe('onlineSchedulesFor', () => {
+  const schedule = (id: string, name: string, emails: string[]): Schedule => ({
+    id,
+    name,
+    timezone: 'America/Denver',
+    config: { rotations: [{ id: `rot-${id}`, layers: [{ id: 'l' }], users: emails.map((email) => ({ email })) }] },
+  });
+  const schedules = [
+    schedule('01M32GRCG30EZK59SER0VMPP67', 'Mike Pack', ['mike@awellhealth.com']),
+    schedule('01M5DFMX7212TK91SBME94SKY3', 'Thomas Vande Casteele', ['thomas@awellhealth.com']),
+    schedule('01M32GTH9ATJQ8X96K4C2BWYWG', 'Triage Captain', ['mike@awellhealth.com', 'thomas@awellhealth.com']),
+  ];
+
+  it("finds the OOO person's own schedule but never Triage Captain", () => {
+    const found = onlineSchedulesFor(schedules, new Set(['mike@awellhealth.com']));
+    expect(found.map((s) => s.name)).toEqual(['Mike Pack']);
+  });
+
+  it('skips schedules nobody OOO is on', () => {
+    expect(onlineSchedulesFor(schedules, new Set(['ej@awellhealth.com']))).toEqual([]);
   });
 });

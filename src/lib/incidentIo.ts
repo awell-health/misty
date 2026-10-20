@@ -75,12 +75,28 @@ export async function listFinalScheduleEntries(
   return entries;
 }
 
-export async function getScheduleRotations(apiKey: string, scheduleId: string): Promise<Rotation[]> {
-  const data = await request<{ schedule: { config: { rotations: Rotation[] } } }>(
-    apiKey,
-    `/v2/schedules/${encodeURIComponent(scheduleId)}`
-  );
-  return data.schedule.config.rotations;
+export interface Schedule {
+  id: string;
+  name: string;
+  timezone: string;
+  config: { rotations: (Rotation & { users?: { email?: string }[] })[] };
+}
+
+export async function listSchedules(apiKey: string): Promise<Schedule[]> {
+  const schedules: Schedule[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    const params = new URLSearchParams({ page_size: '100' });
+    if (after) params.set('after', after);
+    const data = await request<{ schedules: Schedule[]; pagination_meta?: { after?: string } }>(
+      apiKey,
+      `/v2/schedules?${params}`
+    );
+    schedules.push(...data.schedules);
+    after = data.pagination_meta?.after;
+    if (!after) break;
+  }
+  return schedules;
 }
 
 export async function createOverride(apiKey: string, override: OverrideRequest): Promise<{ id: string }> {
