@@ -1,16 +1,18 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchCalendarEvents } from '@/lib/googleCalendar';
-import { createOverride, listFinalScheduleEntries } from '@/lib/incidentIo';
-import { oooWindows, planOverrides } from '@/lib/oooOverrides';
+import { createOverride, getScheduleRotations, listFinalScheduleEntries } from '@/lib/incidentIo';
+import { oooWindows, planOverrides, PlannedOverride, SkippedEntry } from '@/lib/oooOverrides';
 
 export const runtime = 'nodejs';
 
 // How far ahead to look for OOO time, matching the OOO timeline.
 const HORIZON_DAYS = 60;
 
-// Takes engineers on the OOO calendar off the incident.io "online engineers"
-// schedule by overriding their shifts to nobody.
+// Takes engineers on the OOO calendar off their incident.io online schedules
+// (one per engineer, listed in ONLINE_SCHEDULE_IDS) by overriding their shifts
+// to nobody. Only schedules on that list are touched, so on-call rotas such as
+// Triage Captain are never overridden.
 //
 // Runs hourly from Vercel cron (production only). Pass ?dryRun=1 to see the
 // overrides it would create without creating them. Callers must send
@@ -25,11 +27,11 @@ export async function GET(request: NextRequest) {
   }
 
   const apiKey = process.env.INCIDENT_IO_API_KEY;
-  const scheduleId = process.env.ONLINE_ENGINEERS_SCHEDULE_ID;
+  const scheduleIds = (process.env.ONLINE_SCHEDULE_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean);
   const calendarId = process.env.OOO_CALENDAR_ID;
-  if (!apiKey || !scheduleId || !calendarId) {
+  if (!apiKey || scheduleIds.length === 0 || !calendarId) {
     return NextResponse.json(
-      { error: 'INCIDENT_IO_API_KEY, ONLINE_ENGINEERS_SCHEDULE_ID and OOO_CALENDAR_ID must all be set.' },
+      { error: 'INCIDENT_IO_API_KEY, ONLINE_SCHEDULE_IDS and OOO_CALENDAR_ID must all be set.' },
       { status: 503 }
     );
   }
@@ -44,39 +46,45 @@ export async function GET(request: NextRequest) {
   }
 
   const windows = oooWindows(events);
-  let entries;
+
+  const planned: (PlannedOverride & { schedule_id: string })[] = [];
+  const skipped: (SkippedEntry & { schedule_id: string })[] = [];
+  const scheduled = new Set<string | undefined>();
   try {
-    entries = await listFinalScheduleEntries(apiKey, scheduleId, now, horizon);
+    for (const scheduleId of scheduleIds) {
+      const [entries, rotations] = await Promise.all([
+        listFinalScheduleEntries(apiKey, scheduleId, now, horizon),
+        getScheduleRotations(apiKey, scheduleId),
+      ]);
+      entries.forEach((e) => scheduled.add(e.user?.email?.toLowerCase()));
+      const plan = planOverrides(windows, entries, rotations, now);
+      planned.push(...plan.planned.map((p) => ({ schedule_id: scheduleId, ...p })));
+      skipped.push(...plan.skipped.map((p) => ({ schedule_id: scheduleId, ...p })));
+    }
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
 
-  const planned = planOverrides(windows, entries, now);
-
-  // OOO people who never appear on the schedule: either not on the rotation,
-  // or their calendar email doesn't match their incident.io email.
-  const scheduled = new Set(entries.map((e) => e.user?.email?.toLowerCase()));
+  // OOO people who never appear on any listed schedule: either they have no
+  // online schedule yet, or their calendar email doesn't match incident.io.
   const notOnSchedule = Array.from(new Set(windows.map((w) => w.email))).filter((e) => !scheduled.has(e));
 
-  const created: { email: string; start_at: string; end_at: string; id: string }[] = [];
-  const failed: { email: string; start_at: string; end_at: string; error: string }[] = [];
+  const created: { email: string; schedule_id: string; start_at: string; end_at: string; id: string }[] = [];
+  const failed: { email: string; schedule_id: string; start_at: string; end_at: string; error: string }[] = [];
   if (apply) {
     for (const { email, ...override } of planned) {
+      const span = { email, schedule_id: override.schedule_id, start_at: override.start_at, end_at: override.end_at };
       try {
-        const { id } = await createOverride(apiKey, {
-          schedule_id: scheduleId,
-          ...override,
-          user: { id: 'NOBODY' },
-        });
-        created.push({ email, start_at: override.start_at, end_at: override.end_at, id });
+        const { id } = await createOverride(apiKey, { ...override, user: { id: 'NOBODY' } });
+        created.push({ ...span, id });
       } catch (e) {
-        failed.push({ email, start_at: override.start_at, end_at: override.end_at, error: (e as Error).message });
+        failed.push({ ...span, error: (e as Error).message });
       }
     }
   }
 
   return NextResponse.json(
-    { dryRun: !apply, planned, created, failed, notOnSchedule },
+    { dryRun: !apply, planned, skipped, created, failed, notOnSchedule },
     { status: failed.length > 0 ? 502 : 200, headers: { 'Cache-Control': 'no-store' } }
   );
 }

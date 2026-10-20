@@ -3,12 +3,21 @@
 
 const BASE_URL = 'https://api.incident.io';
 
+// incident.io's docs used to list a layer_id here too, but the API never
+// returned it; the layer comes from the schedule's rotations instead.
 export interface ScheduleEntry {
   rotation_id: string;
-  layer_id: string;
   start_at: string;
   end_at: string;
   user?: { id: string; email?: string; name?: string };
+}
+
+// One version of a rotation. Editing a rotation in incident.io adds a version
+// with the same id and a later effective_from (null on the first version).
+export interface Rotation {
+  id: string;
+  effective_from?: string | null;
+  layers: { id: string; name?: string }[];
 }
 
 export interface OverrideRequest {
@@ -64,6 +73,14 @@ export async function listFinalScheduleEntries(
     windowStart = after;
   }
   return entries;
+}
+
+export async function getScheduleRotations(apiKey: string, scheduleId: string): Promise<Rotation[]> {
+  const data = await request<{ schedule: { config: { rotations: Rotation[] } } }>(
+    apiKey,
+    `/v2/schedules/${encodeURIComponent(scheduleId)}`
+  );
+  return data.schedule.config.rotations;
 }
 
 export async function createOverride(apiKey: string, override: OverrideRequest): Promise<{ id: string }> {
