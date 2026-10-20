@@ -141,7 +141,7 @@ describe('onlineSchedulesFor', () => {
   const schedules = [
     schedule('01M32GRCG30EZK59SER0VMPP67', 'Mike Pack', ['mike@awellhealth.com']),
     schedule('01M5DFMX7212TK91SBME94SKY3', 'Thomas Vande Casteele', ['thomas@awellhealth.com']),
-    schedule('01M32GTH9ATJQ8X96K4C2BWYWG', 'Triage Captain', ['mike@awellhealth.com', 'thomas@awellhealth.com']),
+    schedule('01M5DP99BCFWNDZ3ZHHNQJFSK8', 'Triage Captain', ['mike@awellhealth.com', 'thomas@awellhealth.com']),
   ];
 
   it("finds the OOO person's own schedule but never Triage Captain", () => {

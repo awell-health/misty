@@ -72,7 +72,7 @@ function mergeWindows(windows: OOOWindow[]): OOOWindow[] {
 // would leave pages reaching no one. Every other schedule an OOO person is on
 // is treated as their online schedule, so a new on-call rota belongs here.
 export const EXCLUDED_SCHEDULE_IDS = new Set([
-  '01M32GTH9ATJQ8X96K4C2BWYWG', // Triage Captain
+  '01M5DP99BCFWNDZ3ZHHNQJFSK8', // Triage Captain
 ]);
 
 // The schedules worth checking: any non-excluded schedule with an OOO person
