@@ -84,6 +84,18 @@ Environment variables live in Vercel project settings (not GitHub):
 - `NEXT_PUBLIC_FIREBASE_DB_PREFIX` — `prod` for production; optionally `dev` for preview deployments
 - `LINEAR_API_KEY` — optional; enables [Linear-connected hills](docs/linear.md)
 
+Calendar and incident.io integration (all server-only):
+
+- `GOOGLE_SERVICE_ACCOUNT_JSON`, `OOO_CALENDAR_ID` — the OOO Google Calendar
+- `TRIAGE_CAPTAIN_FEED_URL` — incident.io iCal feed for the Triage Captain schedule
+- `INCIDENT_IO_API_KEY`, `CRON_SECRET` — the hourly `/api/ooo-sync` cron,
+  which overrides OOO engineers to nobody on their personal online schedules:
+  every incident.io schedule they're on except the on-call rotas listed in
+  `EXCLUDED_SCHEDULE_IDS` (Triage Captain). Give each online schedule a
+  single-layer rotation; the API can't tell which concurrent layer someone is on. Try it without writing anything:
+  `curl -H "Authorization: Bearer $CRON_SECRET" <url>/api/ooo-sync?dryRun=1`.
+  Vercel only runs crons on production; on a preview, call it by hand.
+
 Vercel deploys on push regardless of CI status. To keep failing tests out of
 production, protect `main` in GitHub (Settings → Branches → require the **CI /
 test** check to pass) so changes land via PRs that must be green before merging.
