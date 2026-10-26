@@ -8,6 +8,8 @@ export function useOOOCalendar() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Outcome of the incident.io override sync that the last refresh ran.
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
   const fetchData = useCallback(async (force = false) => {
     const url = force
@@ -29,7 +31,8 @@ export function useOOOCalendar() {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetch('/api/ooo-calendar/revalidate', { method: 'POST' });
+      const res = await fetch('/api/ooo-calendar/revalidate', { method: 'POST' });
+      setSyncStatus(describeSync(res.ok ? (await res.json()).sync : { error: `HTTP ${res.status}` }));
       await fetchData(true);
     } finally {
       setRefreshing(false);
@@ -40,5 +43,16 @@ export function useOOOCalendar() {
     fetchData();
   }, [fetchData]);
 
-  return { data, loading, refreshing, error, refresh };
+  return { data, loading, refreshing, error, refresh, syncStatus };
+}
+
+type SyncSummary = { created?: number; failed?: number; skipped?: number; error?: string } | undefined;
+
+function describeSync(sync: SyncSummary): string {
+  if (!sync) return 'incident.io sync did not run';
+  if (sync.error) return `incident.io sync failed: ${sync.error}`;
+  const parts = [`${sync.created ?? 0} override${sync.created === 1 ? '' : 's'} created`];
+  if (sync.failed) parts.push(`${sync.failed} failed`);
+  if (sync.skipped) parts.push(`${sync.skipped} skipped`);
+  return `incident.io: ${parts.join(', ')}`;
 }
