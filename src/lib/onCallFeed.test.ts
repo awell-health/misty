@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseIcs } from './ics';
-import { shiftsFromFeed } from './onCallFeed';
+import { shiftsFromFeed, shortName } from './onCallFeed';
 import { dateInZone, zonedMidnight } from './timezone';
 
 // Trimmed from the real incident.io Triage Captain feed, including its
@@ -91,5 +91,21 @@ describe('shiftsFromFeed', () => {
   it('drops shifts that already ended', () => {
     const later = new Date('2026-10-06T00:00:00Z');
     expect(shiftsFromFeed(parseIcs(FEED), later).map((s) => s.name)).toEqual(['Thomas']);
+  });
+});
+
+describe('shortName', () => {
+  it('uses the alias for a full name, ignoring the parenthetical incident.io appends', () => {
+    expect(shortName('Abigaila Ekiert')).toBe('Abi');
+    expect(shortName('Jonathan Belanger (Jonathan (JB))')).toBe('JB');
+  });
+
+  it("doesn't alias someone who only shares a first name", () => {
+    expect(shortName('Abigaila Smith')).toBe('Abigaila');
+  });
+
+  it('falls back to the first name', () => {
+    expect(shortName('Flavio Ferreira')).toBe('Flavio');
+    expect(shortName('Aran')).toBe('Aran');
   });
 });
