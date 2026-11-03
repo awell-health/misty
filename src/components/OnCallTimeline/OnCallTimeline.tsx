@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useOnCallCalendar } from '@/lib/useOnCallCalendar';
 import { useOOOCalendar } from '@/lib/useOOOCalendar';
+import { shortName } from '@/lib/onCallFeed';
 
 const ONCALL_COLOR = '#8250df';
 const CONFLICT_COLOR = '#d1242f';
@@ -276,7 +277,7 @@ export default function OnCallTimeline() {
                     userSelect: 'none',
                     pointerEvents: 'none',
                   }}>
-                    {shift.name}
+                    {shortName(shift.name)}
                   </div>
                 </div>
               );

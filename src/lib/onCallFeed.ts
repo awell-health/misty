@@ -29,3 +29,16 @@ function nearestDayStart(instant: Date): string {
   const sinceMidnight = instant.getTime() - zonedMidnight(day).getTime();
   return sinceMidnight >= 12 * 60 * 60 * 1000 ? addOneDay(day) : day;
 }
+
+// Preferred short names, keyed by full name (lowercased, without any
+// parenthetical incident.io appends, e.g. "Jonathan Belanger (Jonathan (JB))").
+const ALIASES: Record<string, string> = {
+  'abigaila ekiert': 'Abi',
+  'jonathan belanger': 'JB',
+};
+
+// The label under each dot: the alias for this full name, else the first name.
+export function shortName(fullName: string): string {
+  const name = fullName.replace(/\(.*\)/, '').trim();
+  return ALIASES[name.toLowerCase()] ?? name.split(/\s+/)[0] ?? '';
+}
