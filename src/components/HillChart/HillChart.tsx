@@ -9,10 +9,10 @@ import {
   CHART_WIDTH,
   positionToPoint,
   generateHillPath,
-  svgXToPosition,
   getMousePositionInSvg,
   layoutLabels,
   leaderPath,
+  dragPosition,
   DOT_RADIUS,
 } from './hillMath';
 
@@ -34,10 +34,15 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const dragStartPos = useRef<number | null>(null);
+  const dragStartX = useRef(0);
+  const heldExtraTop = useRef(0);
 
-  const handleMouseDown = useCallback((id: string) => {
+  // A drag moves the scope by how far the pointer travels, so grabbing the
+  // label does not make the dot jump to the cursor.
+  const handleMouseDown = useCallback((id: string, clientX: number) => {
     const scope = scopes.find((s) => s.id === id);
     dragStartPos.current = scope?.position ?? 0;
+    if (svgRef.current) dragStartX.current = getMousePositionInSvg(clientX, 0, svgRef.current).x;
     setDraggingId(id);
     setSelectedId(id);
   }, [scopes]);
@@ -48,7 +53,7 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
     const handleMouseMove = (e: MouseEvent) => {
       if (!svgRef.current) return;
       const { x } = getMousePositionInSvg(e.clientX, e.clientY, svgRef.current);
-      const position = svgXToPosition(x);
+      const position = dragPosition(dragStartPos.current ?? 0, dragStartX.current, x);
       onUpdatePosition(draggingId, position);
     };
 
@@ -77,7 +82,7 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
       if (!svgRef.current) return;
       const touch = e.touches[0];
       const { x } = getMousePositionInSvg(touch.clientX, touch.clientY, svgRef.current);
-      const position = svgXToPosition(x);
+      const position = dragPosition(dragStartPos.current ?? 0, dragStartX.current, x);
       onUpdatePosition(draggingId, position);
     };
 
@@ -96,7 +101,7 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [draggingId, onUpdatePosition]);
+  }, [draggingId, onUpdatePosition, onCommitPosition, scopes]);
 
   // Keyboard nudge for selected scope
   useEffect(() => {
@@ -147,7 +152,10 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
     [scopes],
   );
   const placementById = new Map(layout.placements.map((p) => [p.id, p]));
-  const extraTop = layout.extraTop;
+  // While a drag is in progress the chart may grow but never shrinks, so the
+  // hill does not jump under the pointer. It settles on release.
+  const extraTop = draggingId ? Math.max(heldExtraTop.current, layout.extraTop) : layout.extraTop;
+  heldExtraTop.current = draggingId ? extraTop : 0;
 
   // The scope being dragged, hovered or selected stays bright; the rest dim.
   const focusId = draggingId ?? hoveredId ?? selectedId;
@@ -301,8 +309,8 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
                 stroke="var(--bg-default)"
                 strokeWidth={2}
                 style={{ cursor }}
-                onMouseDown={() => handleMouseDown(scope.id)}
-                onTouchStart={() => handleMouseDown(scope.id)}
+                onMouseDown={(e) => handleMouseDown(scope.id, e.clientX)}
+                onTouchStart={(e) => handleMouseDown(scope.id, e.touches[0].clientX)}
               />
               <text
                 x={placement.edgeX}
@@ -311,8 +319,8 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
                 fill="var(--fg-default)"
                 fontSize={placement.small ? 11 : 12}
                 style={{ cursor, userSelect: 'none' }}
-                onMouseDown={() => handleMouseDown(scope.id)}
-                onTouchStart={() => handleMouseDown(scope.id)}
+                onMouseDown={(e) => handleMouseDown(scope.id, e.clientX)}
+                onTouchStart={(e) => handleMouseDown(scope.id, e.touches[0].clientX)}
               >
                 {focusId === scope.id ? scope.name : placement.text}
               </text>
