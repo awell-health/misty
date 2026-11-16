@@ -14,6 +14,7 @@ import {
   leaderPath,
   dragPosition,
   DOT_RADIUS,
+  LABEL_HEADROOM,
 } from './hillMath';
 
 
@@ -152,9 +153,11 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
     [scopes],
   );
   const placementById = new Map(layout.placements.map((p) => [p.id, p]));
-  // While a drag is in progress the chart may grow but never shrinks, so the
-  // hill does not jump under the pointer. It settles on release.
-  const extraTop = draggingId ? Math.max(heldExtraTop.current, layout.extraTop) : layout.extraTop;
+  // The chart reserves a fixed headroom so it keeps one size while scopes move.
+  // Only a crest stack too tall to tighten grows it, and then it never shrinks
+  // mid-drag, so the hill does not jump under the pointer.
+  const neededTop = Math.max(LABEL_HEADROOM, layout.extraTop);
+  const extraTop = draggingId ? Math.max(heldExtraTop.current, neededTop) : neededTop;
   heldExtraTop.current = draggingId ? extraTop : 0;
 
   // The scope being dragged, hovered or selected stays bright; the rest dim.

@@ -49,6 +49,11 @@ export const LABEL_GAP = 22;
 /** Below this fraction of the way up a side, labels sit inside the hill. */
 export const LABEL_SWITCH = 0.22;
 export const LABEL_MAX_CHARS = 26;
+/**
+ * Space always reserved above the chart for labels stacked at the crest, so the
+ * chart keeps one size while scopes move. Fits five labels a side at full row height.
+ */
+export const LABEL_HEADROOM = 44;
 
 export interface LabelInput {
   id: string;
@@ -72,7 +77,7 @@ export interface LabelPlacement {
 
 export interface LabelLayout {
   placements: LabelPlacement[];
-  /** Extra height the chart needs above y=0 for crest stacks. */
+  /** Height the crest stacks need above y=0. Exceeds LABEL_HEADROOM only when a stack cannot be tightened enough. */
   extraTop: number;
 }
 
@@ -144,7 +149,19 @@ export function layoutLabels(scopes: LabelInput[]): LabelLayout {
   sides.forEach(({ side, inside, outside }, index) => {
     const otherHasInside = sides[1 - index].inside.length > 0;
 
-    for (const row of stackRows(outside, LABEL_ROW)) {
+    // Tighten the row pitch until the outside stack fits in the reserved headroom.
+    const outsideLimit = BASELINE_Y - 12 + LABEL_HEADROOM;
+    let outsidePitch = LABEL_ROW;
+    let outsideRows = stackRows(outside, outsidePitch);
+    while (
+      outsidePitch > LABEL_ROW_MIN &&
+      outsideRows.length > 0 &&
+      outsideRows[outsideRows.length - 1].rowHeight > outsideLimit
+    ) {
+      outsidePitch -= 1;
+      outsideRows = stackRows(outside, outsidePitch);
+    }
+    for (const row of outsideRows) {
       highestOutsideRow = Math.max(highestOutsideRow, row.rowHeight);
       const text = truncateName(row.scope.name, LABEL_MAX_CHARS);
       placements.push({
@@ -155,7 +172,7 @@ export function layoutLabels(scopes: LabelInput[]): LabelLayout {
         anchor: side < 0 ? 'end' : 'start',
         text,
         truncated: text !== row.scope.name,
-        small: false,
+        small: outsidePitch < 16,
       });
     }
 

@@ -10,6 +10,7 @@ import {
   LABEL_GAP,
   LABEL_ROW,
   LABEL_ROW_MIN,
+  LABEL_HEADROOM,
   truncateName,
   layoutLabels,
   leaderPath,
@@ -144,6 +145,22 @@ describe('layoutLabels', () => {
   it('reports extra height only when the crest stack needs it', () => {
     expect(layoutLabels(mk([0.45, 0.48])).extraTop).toBe(0);
     expect(layoutLabels(mk([0.4, 0.42, 0.44, 0.46, 0.47, 0.48, 0.49])).extraTop).toBeGreaterThan(0);
+  });
+
+  it('fits five crest labels on one side in the reserved headroom at full row height', () => {
+    const l = layoutLabels(mk([0.42, 0.44, 0.46, 0.48, 0.49]));
+    expect(l.extraTop).toBeLessThanOrEqual(LABEL_HEADROOM);
+    expect(l.placements.every((p) => !p.small)).toBe(true);
+  });
+
+  it('tightens crest rows before asking for more than the reserved headroom', () => {
+    const l = layoutLabels(mk([0.4, 0.42, 0.44, 0.46, 0.48, 0.49]));
+    expect(l.extraTop).toBeLessThanOrEqual(LABEL_HEADROOM);
+    const ys = l.placements.map((p) => p.labelY).sort((a, b) => a - b);
+    for (let i = 1; i < ys.length; i++) {
+      expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(LABEL_ROW_MIN - 0.01);
+      expect(ys[i] - ys[i - 1]).toBeLessThan(LABEL_ROW);
+    }
   });
 
   it('gives scopes at the same position separate rows', () => {
