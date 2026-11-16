@@ -160,8 +160,9 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
   const extraTop = draggingId ? Math.max(heldExtraTop.current, neededTop) : neededTop;
   heldExtraTop.current = draggingId ? extraTop : 0;
 
-  // The scope being dragged, hovered or selected stays bright; the rest dim.
-  const focusId = draggingId ?? hoveredId ?? selectedId;
+  // Only while a scope is being dragged or hovered does it stay bright and the
+  // rest dim. A scope left selected for keyboard nudging looks like any other.
+  const focusId = draggingId ?? hoveredId;
   const fade = (id: string, full = 1) => ({
     opacity: focusId && focusId !== id ? full * 0.22 : full,
     transition: 'opacity 120ms',

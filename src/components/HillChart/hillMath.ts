@@ -42,7 +42,7 @@ export function getMousePositionInSvg(
 
 // --- Scope label layout ---
 
-export const DOT_RADIUS = 7;
+export const DOT_RADIUS = 8;
 export const LABEL_ROW = 18;
 export const LABEL_ROW_MIN = 14;
 export const LABEL_GAP = 22;
