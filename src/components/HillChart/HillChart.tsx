@@ -328,7 +328,6 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
                 onMouseDown={(e) => handleMouseDown(scope.id, e.clientX)}
                 onTouchStart={(e) => handleMouseDown(scope.id, e.touches[0].clientX)}
               >
-                <title>{scope.name}</title>
                 {focusId === scope.id ? placement.fullText : placement.text}
               </text>
             </g>
