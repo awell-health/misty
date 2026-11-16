@@ -70,6 +70,8 @@ export interface LabelPlacement {
   edgeX: number;
   anchor: 'start' | 'end';
   text: string;
+  /** Name to show while the scope is hovered or dragged: the full name, cut only if it would leave the chart. */
+  fullText: string;
   truncated: boolean;
   /** Render at 11px instead of 12px. */
   small: boolean;
@@ -115,8 +117,11 @@ function curveX(side: Side, height: number): number {
   return PADDING + (side < 0 ? p : 1 - p) * CHART_WIDTH;
 }
 
-/** Lowest dot first; each label sits level with its dot or one pitch above the label below. */
-function stackRows(group: LabelInput[], pitch: number): Row[] {
+/**
+ * Lowest dot first; each label sits level with its dot (or at `floor`, if that
+ * is higher) or one pitch above the label below.
+ */
+function stackRows(group: LabelInput[], pitch: number, floor: (row: Row) => number = () => 0): Row[] {
   const rows = group
     .map((scope) => {
       const dot = positionToPoint(scope.position);
@@ -124,9 +129,16 @@ function stackRows(group: LabelInput[], pitch: number): Row[] {
     })
     .sort((a, b) => a.height - b.height || a.scope.position - b.scope.position);
   rows.forEach((row, i) => {
-    row.rowHeight = i === 0 ? row.height : Math.max(row.height, rows[i - 1].rowHeight + pitch);
+    const wanted = Math.max(row.height, floor(row));
+    row.rowHeight = i === 0 ? wanted : Math.max(wanted, rows[i - 1].rowHeight + pitch);
   });
   return rows;
+}
+
+/** Longest version of a name that fits between a label's text edge and the chart edge. */
+function fitToChart(name: string, edgeX: number, anchor: 'start' | 'end', charWidth: number, atLeast: number): string {
+  const room = anchor === 'end' ? edgeX : SVG_WIDTH - edgeX;
+  return truncateName(name, Math.max(atLeast, Math.floor(room / charWidth)));
 }
 
 /**
@@ -152,25 +164,34 @@ export function layoutLabels(scopes: LabelInput[]): LabelLayout {
     // Tighten the row pitch until the outside stack fits in the reserved headroom.
     const outsideLimit = BASELINE_Y - 12 + LABEL_HEADROOM;
     let outsidePitch = LABEL_ROW;
-    let outsideRows = stackRows(outside, outsidePitch);
+    // Near the crest the curve is almost flat, so a label level with its dot
+    // would sit on the hill line. Keep its text 9px above the curve at its near end.
+    const clearOfCurve = (row: Row) => {
+      const edge = row.dot.x + side * LABEL_GAP;
+      return BASELINE_Y - positionToPoint(clamp01((edge - PADDING) / CHART_WIDTH)).y + 9;
+    };
+    let outsideRows = stackRows(outside, outsidePitch, clearOfCurve);
     while (
       outsidePitch > LABEL_ROW_MIN &&
       outsideRows.length > 0 &&
       outsideRows[outsideRows.length - 1].rowHeight > outsideLimit
     ) {
       outsidePitch -= 1;
-      outsideRows = stackRows(outside, outsidePitch);
+      outsideRows = stackRows(outside, outsidePitch, clearOfCurve);
     }
     for (const row of outsideRows) {
       highestOutsideRow = Math.max(highestOutsideRow, row.rowHeight);
       const text = truncateName(row.scope.name, LABEL_MAX_CHARS);
+      const edgeX = row.dot.x + side * LABEL_GAP;
+      const anchor = side < 0 ? 'end' : 'start';
       placements.push({
         id: row.scope.id,
         dot: row.dot,
         labelY: BASELINE_Y - row.rowHeight,
-        edgeX: row.dot.x + side * LABEL_GAP,
-        anchor: side < 0 ? 'end' : 'start',
+        edgeX,
+        anchor,
         text,
+        fullText: fitToChart(row.scope.name, edgeX, anchor, outsidePitch < 16 ? 5.9 : 6.4, text.length),
         truncated: text !== row.scope.name,
         small: outsidePitch < 16,
       });
@@ -204,13 +225,15 @@ export function layoutLabels(scopes: LabelInput[]): LabelLayout {
           : curveX(-side as Side, row.rowHeight + 10) + side * 12;
         const maxChars = Math.max(6, Math.floor(Math.abs(limit - edgeX) / charWidth));
         const text = truncateName(row.scope.name, Math.min(LABEL_MAX_CHARS, maxChars));
+        const anchor = side < 0 ? 'start' : 'end';
         placements.push({
           id: row.scope.id,
           dot: row.dot,
           labelY: BASELINE_Y - row.rowHeight,
           edgeX,
-          anchor: side < 0 ? 'start' : 'end',
+          anchor,
           text,
+          fullText: fitToChart(row.scope.name, edgeX, anchor, charWidth, text.length),
           truncated: text !== row.scope.name,
           small,
         });

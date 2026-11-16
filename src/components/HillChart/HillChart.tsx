@@ -162,11 +162,12 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
 
   // Only while a scope is being dragged or hovered does it stay bright and the
   // rest dim. A scope left selected for keyboard nudging looks like any other.
-  const focusId = draggingId ?? hoveredId;
-  const fade = (id: string, full = 1) => ({
-    opacity: focusId && focusId !== id ? full * 0.22 : full,
-    transition: 'opacity 120ms',
-  });
+  // A hovered scope that has since left the chart must not leave the rest dimmed.
+  const wantedFocus = draggingId ?? hoveredId;
+  const focusId = wantedFocus && placementById.has(wantedFocus) ? wantedFocus : null;
+  const fade = (id: string, full = 1) => ({ opacity: focusId && focusId !== id ? full * 0.22 : full });
+  // The transition lives in a class so reduced-motion can switch it off.
+  const fadeClass = 'transition-opacity duration-[120ms] motion-reduce:transition-none';
 
   return (
     <div className="bg-bg-default border border-border-muted rounded-lg p-4">
@@ -284,7 +285,7 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
               fill="none"
               stroke={scope.color}
               strokeWidth={1}
-              className="motion-reduce:transition-none"
+              className={fadeClass}
               style={{ ...fade(scope.id, 0.7), pointerEvents: 'none' }}
             />
           );
@@ -300,10 +301,11 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
           return (
             <g
               key={scope.id}
-              className="motion-reduce:transition-none"
+              className={fadeClass}
               style={fade(scope.id)}
-              onMouseEnter={() => setHoveredId(scope.id)}
-              onMouseLeave={() => setHoveredId((id) => (id === scope.id ? null : id))}
+              // Mouse only: a tap would leave the scope "hovered", and the rest dimmed, until the next tap.
+              onPointerEnter={(e) => e.pointerType === 'mouse' && setHoveredId(scope.id)}
+              onPointerLeave={() => setHoveredId((id) => (id === scope.id ? null : id))}
             >
               <circle
                 cx={dot.x}
@@ -326,7 +328,8 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
                 onMouseDown={(e) => handleMouseDown(scope.id, e.clientX)}
                 onTouchStart={(e) => handleMouseDown(scope.id, e.touches[0].clientX)}
               >
-                {focusId === scope.id ? scope.name : placement.text}
+                <title>{scope.name}</title>
+                {focusId === scope.id ? placement.fullText : placement.text}
               </text>
             </g>
           );

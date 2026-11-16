@@ -163,6 +163,27 @@ describe('layoutLabels', () => {
     }
   });
 
+  it('lifts a lone crest label clear of the hill line', () => {
+    for (const position of [0.42, 0.47, 0.5, 0.55]) {
+      const p = by(layoutLabels(mk([position])), 's0');
+      const curveY = positionToPoint((p.edgeX - PADDING) / CHART_WIDTH).y;
+      expect(p.labelY + 6).toBeLessThanOrEqual(curveY - 2); // text bottom above the curve at its near end
+    }
+  });
+
+  it('cuts the hover name to what fits inside the chart edges', () => {
+    const long = 'Moving Langsmith -> Phoenix + Aegra';
+    const l = layoutLabels([
+      { id: 'a', name: long, position: 0.22 },
+      { id: 'b', name: long, position: 0.78 },
+      { id: 'c', name: long, position: 0.45 },
+    ]);
+    expect(by(l, 'a').edgeX - by(l, 'a').fullText.length * 6.4).toBeGreaterThanOrEqual(0);
+    expect(by(l, 'b').edgeX + by(l, 'b').fullText.length * 6.4).toBeLessThanOrEqual(SVG_WIDTH);
+    expect(by(l, 'a').fullText.length).toBeGreaterThanOrEqual(by(l, 'a').text.length);
+    expect(by(l, 'c').fullText).toBe(long); // room to spare: full name
+  });
+
   it('gives scopes at the same position separate rows', () => {
     const l = layoutLabels(mk([0, 0, 0]));
     const ys = l.placements.map((p) => p.labelY).sort((a, b) => a - b);
