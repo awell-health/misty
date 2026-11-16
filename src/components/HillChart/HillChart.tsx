@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Scope } from '@/types';
 import {
   SVG_WIDTH,
@@ -11,6 +11,9 @@ import {
   generateHillPath,
   svgXToPosition,
   getMousePositionInSvg,
+  layoutLabels,
+  leaderPath,
+  DOT_RADIUS,
 } from './hillMath';
 
 
@@ -21,7 +24,6 @@ interface HillChartProps {
   originPositions?: Record<string, number>; // scope id → current position (shown as ghost in goal mode)
 }
 
-const DOT_RADIUS = 8;
 const GHOST_RADIUS = 6;
 const NUDGE_STEP = 0.01;
 const hillPath = generateHillPath();
@@ -30,6 +32,7 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
   const svgRef = useRef<SVGSVGElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const dragStartPos = useRef<number | null>(null);
 
   const handleMouseDown = useCallback((id: string) => {
@@ -139,11 +142,25 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
   const midX = PADDING + CHART_WIDTH / 2;
   const baselineY = SVG_HEIGHT - PADDING;
 
+  const layout = useMemo(
+    () => layoutLabels(scopes.map((s) => ({ id: s.id, name: s.name, position: s.position }))),
+    [scopes],
+  );
+  const placementById = new Map(layout.placements.map((p) => [p.id, p]));
+  const extraTop = layout.extraTop;
+
+  // The scope being dragged, hovered or selected stays bright; the rest dim.
+  const focusId = draggingId ?? hoveredId ?? selectedId;
+  const fade = (id: string, full = 1) => ({
+    opacity: focusId && focusId !== id ? full * 0.22 : full,
+    transition: 'opacity 120ms',
+  });
+
   return (
     <div className="bg-bg-default border border-border-muted rounded-lg p-4">
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+        viewBox={`0 ${-extraTop} ${SVG_WIDTH} ${SVG_HEIGHT + extraTop}`}
         width="100%"
         preserveAspectRatio="xMidYMid meet"
         className="block w-full h-auto"
@@ -244,35 +261,60 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
           );
         })}
 
-        {/* Scope dots */}
+        {/* Leader lines from each label to its dot */}
         {scopes.map((scope) => {
-          const { x, y } = positionToPoint(scope.position);
-          const isDragging = draggingId === scope.id;
-          const isSelected = selectedId === scope.id;
+          const placement = placementById.get(scope.id);
+          if (!placement) return null;
           return (
-            <g key={scope.id}>
+            <path
+              key={`leader-${scope.id}`}
+              d={leaderPath(placement)}
+              fill="none"
+              stroke={scope.color}
+              strokeWidth={1}
+              className="motion-reduce:transition-none"
+              style={{ ...fade(scope.id, 0.7), pointerEvents: 'none' }}
+            />
+          );
+        })}
+
+        {/* Scope dots and labels */}
+        {scopes.map((scope) => {
+          const placement = placementById.get(scope.id);
+          if (!placement) return null;
+          const { dot } = placement;
+          const isDragging = draggingId === scope.id;
+          const cursor = isDragging ? 'grabbing' : 'grab';
+          return (
+            <g
+              key={scope.id}
+              className="motion-reduce:transition-none"
+              style={fade(scope.id)}
+              onMouseEnter={() => setHoveredId(scope.id)}
+              onMouseLeave={() => setHoveredId((id) => (id === scope.id ? null : id))}
+            >
               <circle
-                cx={x}
-                cy={y}
+                cx={dot.x}
+                cy={dot.y}
                 r={DOT_RADIUS}
                 fill={scope.color}
                 stroke="var(--bg-default)"
                 strokeWidth={2}
-                style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+                style={{ cursor }}
                 onMouseDown={() => handleMouseDown(scope.id)}
                 onTouchStart={() => handleMouseDown(scope.id)}
               />
               <text
-                x={scope.position > 0.7 ? x - DOT_RADIUS - 4 : x + DOT_RADIUS + 4}
-                y={y + 4}
-                textAnchor={scope.position > 0.7 ? 'end' : 'start'}
+                x={placement.edgeX}
+                y={placement.labelY + 4}
+                textAnchor={placement.anchor}
                 fill="var(--fg-default)"
-                fontSize={11}
-                style={{ cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
+                fontSize={placement.small ? 11 : 12}
+                style={{ cursor, userSelect: 'none' }}
                 onMouseDown={() => handleMouseDown(scope.id)}
                 onTouchStart={() => handleMouseDown(scope.id)}
               >
-                {scope.name}
+                {focusId === scope.id ? scope.name : placement.text}
               </text>
             </g>
           );
