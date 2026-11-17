@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Scope } from '@/types';
 import {
   SVG_WIDTH,
@@ -9,8 +9,12 @@ import {
   CHART_WIDTH,
   positionToPoint,
   generateHillPath,
-  svgXToPosition,
   getMousePositionInSvg,
+  layoutLabels,
+  leaderPath,
+  dragPosition,
+  DOT_RADIUS,
+  LABEL_HEADROOM,
 } from './hillMath';
 
 
@@ -21,7 +25,6 @@ interface HillChartProps {
   originPositions?: Record<string, number>; // scope id → current position (shown as ghost in goal mode)
 }
 
-const DOT_RADIUS = 8;
 const GHOST_RADIUS = 6;
 const NUDGE_STEP = 0.01;
 const hillPath = generateHillPath();
@@ -30,11 +33,17 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
   const svgRef = useRef<SVGSVGElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const dragStartPos = useRef<number | null>(null);
+  const dragStartX = useRef(0);
+  const heldExtraTop = useRef(0);
 
-  const handleMouseDown = useCallback((id: string) => {
+  // A drag moves the scope by how far the pointer travels, so grabbing the
+  // label does not make the dot jump to the cursor.
+  const handleMouseDown = useCallback((id: string, clientX: number) => {
     const scope = scopes.find((s) => s.id === id);
     dragStartPos.current = scope?.position ?? 0;
+    if (svgRef.current) dragStartX.current = getMousePositionInSvg(clientX, 0, svgRef.current).x;
     setDraggingId(id);
     setSelectedId(id);
   }, [scopes]);
@@ -45,7 +54,7 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
     const handleMouseMove = (e: MouseEvent) => {
       if (!svgRef.current) return;
       const { x } = getMousePositionInSvg(e.clientX, e.clientY, svgRef.current);
-      const position = svgXToPosition(x);
+      const position = dragPosition(dragStartPos.current ?? 0, dragStartX.current, x);
       onUpdatePosition(draggingId, position);
     };
 
@@ -74,7 +83,7 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
       if (!svgRef.current) return;
       const touch = e.touches[0];
       const { x } = getMousePositionInSvg(touch.clientX, touch.clientY, svgRef.current);
-      const position = svgXToPosition(x);
+      const position = dragPosition(dragStartPos.current ?? 0, dragStartX.current, x);
       onUpdatePosition(draggingId, position);
     };
 
@@ -93,7 +102,7 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [draggingId, onUpdatePosition]);
+  }, [draggingId, onUpdatePosition, onCommitPosition, scopes]);
 
   // Keyboard nudge for selected scope
   useEffect(() => {
@@ -139,11 +148,32 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
   const midX = PADDING + CHART_WIDTH / 2;
   const baselineY = SVG_HEIGHT - PADDING;
 
+  const layout = useMemo(
+    () => layoutLabels(scopes.map((s) => ({ id: s.id, name: s.name, position: s.position }))),
+    [scopes],
+  );
+  const placementById = new Map(layout.placements.map((p) => [p.id, p]));
+  // The chart reserves a fixed headroom so it keeps one size while scopes move.
+  // Only a crest stack too tall to tighten grows it, and then it never shrinks
+  // mid-drag, so the hill does not jump under the pointer.
+  const neededTop = Math.max(LABEL_HEADROOM, layout.extraTop);
+  const extraTop = draggingId ? Math.max(heldExtraTop.current, neededTop) : neededTop;
+  heldExtraTop.current = draggingId ? extraTop : 0;
+
+  // Only while a scope is being dragged or hovered does it stay bright and the
+  // rest dim. A scope left selected for keyboard nudging looks like any other.
+  // A hovered scope that has since left the chart must not leave the rest dimmed.
+  const wantedFocus = draggingId ?? hoveredId;
+  const focusId = wantedFocus && placementById.has(wantedFocus) ? wantedFocus : null;
+  const fade = (id: string, full = 1) => ({ opacity: focusId && focusId !== id ? full * 0.22 : full });
+  // The transition lives in a class so reduced-motion can switch it off.
+  const fadeClass = 'transition-opacity duration-[120ms] motion-reduce:transition-none';
+
   return (
     <div className="bg-bg-default border border-border-muted rounded-lg p-4">
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+        viewBox={`0 ${-extraTop} ${SVG_WIDTH} ${SVG_HEIGHT + extraTop}`}
         width="100%"
         preserveAspectRatio="xMidYMid meet"
         className="block w-full h-auto"
@@ -244,35 +274,72 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
           );
         })}
 
-        {/* Scope dots */}
+        {/* Leader lines from each label to its dot */}
         {scopes.map((scope) => {
-          const { x, y } = positionToPoint(scope.position);
-          const isDragging = draggingId === scope.id;
-          const isSelected = selectedId === scope.id;
+          const placement = placementById.get(scope.id);
+          if (!placement) return null;
+          const d = leaderPath(placement);
           return (
-            <g key={scope.id}>
+            <g
+              key={`leader-${scope.id}`}
+              className={fadeClass}
+              style={fade(scope.id)}
+              onPointerEnter={(e) => e.pointerType === 'mouse' && setHoveredId(scope.id)}
+              onPointerLeave={() => setHoveredId((id) => (id === scope.id ? null : id))}
+            >
+              <path d={d} fill="none" stroke={scope.color} strokeWidth={1} opacity={0.7} />
+              {/* Invisible wide stroke: makes the 1px line easy to hover and grab */}
+              <path
+                d={d}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={10}
+                style={{ pointerEvents: 'stroke', cursor: draggingId === scope.id ? 'grabbing' : 'grab' }}
+                onMouseDown={(e) => handleMouseDown(scope.id, e.clientX)}
+                onTouchStart={(e) => handleMouseDown(scope.id, e.touches[0].clientX)}
+              />
+            </g>
+          );
+        })}
+
+        {/* Scope dots and labels */}
+        {scopes.map((scope) => {
+          const placement = placementById.get(scope.id);
+          if (!placement) return null;
+          const { dot } = placement;
+          const isDragging = draggingId === scope.id;
+          const cursor = isDragging ? 'grabbing' : 'grab';
+          return (
+            <g
+              key={scope.id}
+              className={fadeClass}
+              style={fade(scope.id)}
+              // Mouse only: a tap would leave the scope "hovered", and the rest dimmed, until the next tap.
+              onPointerEnter={(e) => e.pointerType === 'mouse' && setHoveredId(scope.id)}
+              onPointerLeave={() => setHoveredId((id) => (id === scope.id ? null : id))}
+            >
               <circle
-                cx={x}
-                cy={y}
+                cx={dot.x}
+                cy={dot.y}
                 r={DOT_RADIUS}
                 fill={scope.color}
                 stroke="var(--bg-default)"
                 strokeWidth={2}
-                style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-                onMouseDown={() => handleMouseDown(scope.id)}
-                onTouchStart={() => handleMouseDown(scope.id)}
+                style={{ cursor }}
+                onMouseDown={(e) => handleMouseDown(scope.id, e.clientX)}
+                onTouchStart={(e) => handleMouseDown(scope.id, e.touches[0].clientX)}
               />
               <text
-                x={scope.position > 0.7 ? x - DOT_RADIUS - 4 : x + DOT_RADIUS + 4}
-                y={y + 4}
-                textAnchor={scope.position > 0.7 ? 'end' : 'start'}
+                x={placement.edgeX}
+                y={placement.labelY + 4}
+                textAnchor={placement.anchor}
                 fill="var(--fg-default)"
-                fontSize={11}
-                style={{ cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
-                onMouseDown={() => handleMouseDown(scope.id)}
-                onTouchStart={() => handleMouseDown(scope.id)}
+                fontSize={placement.small ? 11 : 12}
+                style={{ cursor, userSelect: 'none' }}
+                onMouseDown={(e) => handleMouseDown(scope.id, e.clientX)}
+                onTouchStart={(e) => handleMouseDown(scope.id, e.touches[0].clientX)}
               >
-                {scope.name}
+                {focusId === scope.id ? placement.fullText : placement.text}
               </text>
             </g>
           );
