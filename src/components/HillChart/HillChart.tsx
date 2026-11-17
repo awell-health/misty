@@ -278,16 +278,27 @@ export default function HillChart({ scopes, onUpdatePosition, onCommitPosition, 
         {scopes.map((scope) => {
           const placement = placementById.get(scope.id);
           if (!placement) return null;
+          const d = leaderPath(placement);
           return (
-            <path
+            <g
               key={`leader-${scope.id}`}
-              d={leaderPath(placement)}
-              fill="none"
-              stroke={scope.color}
-              strokeWidth={1}
               className={fadeClass}
-              style={{ ...fade(scope.id, 0.7), pointerEvents: 'none' }}
-            />
+              style={fade(scope.id)}
+              onPointerEnter={(e) => e.pointerType === 'mouse' && setHoveredId(scope.id)}
+              onPointerLeave={() => setHoveredId((id) => (id === scope.id ? null : id))}
+            >
+              <path d={d} fill="none" stroke={scope.color} strokeWidth={1} opacity={0.7} />
+              {/* Invisible wide stroke: makes the 1px line easy to hover and grab */}
+              <path
+                d={d}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={10}
+                style={{ pointerEvents: 'stroke', cursor: draggingId === scope.id ? 'grabbing' : 'grab' }}
+                onMouseDown={(e) => handleMouseDown(scope.id, e.clientX)}
+                onTouchStart={(e) => handleMouseDown(scope.id, e.touches[0].clientX)}
+              />
+            </g>
           );
         })}
 
