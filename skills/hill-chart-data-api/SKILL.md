@@ -58,7 +58,7 @@ The API returns plain, order-sorted arrays (the storage-level id maps and
 ```jsonc
 {
   "id": "uuid",
-  "name": "string",
+  "name": "string",       // at most 256 characters, or the write is refused (400)
   "color": "#1a7f37",
   "date": 1710000000000,  // epoch MILLISECONDS — absolute calendar date
   "order": 0

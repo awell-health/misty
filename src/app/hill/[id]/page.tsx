@@ -176,7 +176,7 @@ export default function HillPage() {
   );
 
   const handleAddTimelineProject = useCallback(
-    () => addTimelineProject(id),
+    (date: number) => addTimelineProject(id, date),
     [id, addTimelineProject]
   );
 

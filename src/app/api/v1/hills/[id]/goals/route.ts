@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api/auth';
-import { listGoals, createGoal, CreateGoalInput } from '@/lib/api/store';
+import { listGoals, createGoal, CreateGoalInput, goalNameError } from '@/lib/api/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +37,9 @@ export async function POST(
   if (body?.date !== undefined && typeof body.date !== 'number') {
     return NextResponse.json({ error: '`date` must be epoch milliseconds (number)' }, { status: 400 });
   }
+
+  const nameError = goalNameError(body?.name);
+  if (nameError) return NextResponse.json({ error: nameError }, { status: 400 });
 
   const input: CreateGoalInput = {
     name: body?.name,

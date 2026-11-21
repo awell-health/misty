@@ -114,6 +114,9 @@ Send only the fields you want to change. Accepted: `name`, `description`,
 
 Accepted: `name`, `color`, `date` (epoch ms), `order`.
 
+A goal `name` is at most 256 characters, on create and update; a longer one is
+refused with `400`.
+
 ## Examples (curl)
 
 ```bash

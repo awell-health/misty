@@ -22,6 +22,10 @@ export interface TimelineProject {
   order: number;
 }
 
+// Long enough for an outcome written as a sentence; anything longer belongs in
+// a description. Counted in UTF-16 units, the same as an input's maxLength.
+export const GOAL_NAME_MAX_LENGTH = 256;
+
 export type TimelineMode = 'fixed-timeline' | 'fixed-scope';
 
 // A hill connected to a Linear project. Misty owns the label group named here
