@@ -570,11 +570,11 @@ export default function HillTimeline({
             <button
               onClick={() => setShowLegend((v) => !v)}
               aria-pressed={showLegend}
+              aria-label="Legend"
               title={showLegend ? 'Hide legend' : 'List goals below the timeline'}
-              className={`flex items-center gap-1 px-2 py-[3px] text-[11px] font-medium rounded-md border cursor-pointer transition-colors ${showLegend ? 'border-border-accent bg-bg-accent-subtle text-fg-accent' : 'border-border-muted bg-bg-default text-fg-muted hover:text-fg-default'}`}
+              className={`flex items-center justify-center self-stretch px-[6px] rounded-md border cursor-pointer transition-colors ${showLegend ? 'border-border-accent bg-bg-accent-subtle text-fg-accent' : 'border-border-muted bg-bg-default text-fg-muted hover:text-fg-default'}`}
             >
               <LegendIcon />
-              Legend
             </button>
           </div>
 
