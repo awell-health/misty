@@ -37,7 +37,7 @@ interface HillsContextValue {
   commitScopeGoalPosition: (hillId: string, scopeId: string, oldPosition: number, newPosition: number) => void;
   syncGoalsFromCurrent: (hillId: string) => void;
   reorderScopes: (hillId: string, fromIndex: number, toIndex: number) => void;
-  addTimelineProject: (hillId: string) => string;
+  addTimelineProject: (hillId: string, date?: number) => string;
   deleteTimelineProject: (hillId: string, projectId: string) => void;
   updateTimelineProjectName: (hillId: string, projectId: string, name: string) => void;
   updateTimelineProjectColor: (hillId: string, projectId: string, color: string) => void;
@@ -703,7 +703,7 @@ export function HillsProvider({ children }: { children: ReactNode }) {
     [hills, pushUndo]
   );
 
-  const addTimelineProject = useCallback((hillId: string) => {
+  const addTimelineProject = useCallback((hillId: string, date?: number) => {
     const id = crypto.randomUUID();
     const db = getFirebaseDb();
     const hill = hills.find((h) => h.id === hillId);
@@ -712,7 +712,7 @@ export function HillsProvider({ children }: { children: ReactNode }) {
     const projectData = {
       name: 'New goal',
       color: SCOPE_COLORS[existingProjects.length % SCOPE_COLORS.length],
-      date: Math.round(Date.now() + 45 * 24 * 60 * 60 * 1000), // ~1.5 months from now
+      date: date ?? Math.round(Date.now() + 45 * 24 * 60 * 60 * 1000), // ~1.5 months from now
       order: maxOrder + 1,
     };
     set(ref(db, dbPath(`hills/${hillId}/timelineProjects/${id}`)), projectData);

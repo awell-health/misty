@@ -1,6 +1,6 @@
 import { ref, get, set, update, remove } from 'firebase/database';
 import { getFirebaseDb, getDbPrefix } from '@/lib/firebase';
-import { Scope, TimelineProject, Hill, HillLinearConnection, SCOPE_COLORS } from '@/types';
+import { Scope, TimelineProject, Hill, HillLinearConnection, SCOPE_COLORS, GOAL_NAME_MAX_LENGTH } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Path helpers
@@ -216,6 +216,15 @@ export interface CreateGoalInput {
   name?: string;
   color?: string;
   date?: number; // epoch ms
+}
+
+// The reason a goal name from an API client would be refused, or null if it is
+// fine. A missing name is fine: create defaults it and update leaves it alone.
+export function goalNameError(name: unknown): string | null {
+  if (name === undefined) return null;
+  if (typeof name !== 'string') return '`name` must be a string';
+  if (name.length > GOAL_NAME_MAX_LENGTH) return `\`name\` must be at most ${GOAL_NAME_MAX_LENGTH} characters`;
+  return null;
 }
 
 export interface UpdateGoalInput {

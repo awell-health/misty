@@ -1,12 +1,20 @@
 'use client';
 
 import { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
-import { TimelineProject, TimelineMode, SCOPE_COLORS } from '@/types';
+import { TimelineProject, TimelineMode, SCOPE_COLORS, GOAL_NAME_MAX_LENGTH } from '@/types';
+import {
+  TimelineRange,
+  TIMELINE_RANGES,
+  buildTimelineScale,
+  defaultGoalDate,
+  partitionGoals,
+  positionOf,
+} from './timelineScale';
 
 interface HillTimelineProps {
   projects: TimelineProject[];
   mode: TimelineMode;
-  onAddProject: () => string;
+  onAddProject: (date: number) => string;
   onDeleteProject: (id: string) => void;
   onUpdateProjectName: (id: string, name: string) => void;
   onUpdateProjectColor: (id: string, color: string) => void;
@@ -23,6 +31,10 @@ const MODE_LABELS: Record<TimelineMode, string> = {
 // Vertical height of one stacked name label; colliding labels step up by this.
 const NAME_LINE_H = 15;
 
+// The edit popover shows a character count once a name gets this close to the
+// limit, so a long paste isn't cut short without a word.
+const NAME_COUNT_FROM = GOAL_NAME_MAX_LENGTH - 56;
+
 function CalendarIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -30,6 +42,19 @@ function CalendarIcon() {
       <line x1="1" y1="5.5" x2="13" y2="5.5" stroke="currentColor" strokeWidth="1.3"/>
       <line x1="4" y1="1" x2="4" y2="4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
       <line x1="10" y1="1" x2="10" y2="4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function LegendIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden>
+      <circle cx="2" cy="2.5" r="1.5"/>
+      <circle cx="2" cy="6" r="1.5"/>
+      <circle cx="2" cy="9.5" r="1.5"/>
+      <rect x="5" y="1.75" width="7" height="1.5" rx="0.75"/>
+      <rect x="5" y="5.25" width="7" height="1.5" rx="0.75"/>
+      <rect x="5" y="8.75" width="7" height="1.5" rx="0.75"/>
     </svg>
   );
 }
@@ -66,36 +91,15 @@ export default function HillTimeline({
   const nameInputRef = useRef<HTMLInputElement>(null);
   const labelRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [lanes, setLanes] = useState<Record<string, number>>({});
+  // How far ahead to look, and whether to list the goals below the track.
+  // Both are this viewer's own view of the hill, so they aren't persisted.
+  const [range, setRange] = useState<TimelineRange>('6m');
+  const [showLegend, setShowLegend] = useState(false);
 
-  const { monthMarkers, weekTicks, timelineStart, timelineTotalMs } = useMemo(() => {
-    const now = new Date();
-    const start = now.getTime();
-    // Cap at the last day of the 6th month counting the current one: in July the
-    // window ends on Dec 31 (day 0 of month+6 = last day of the prior month).
-    const end = new Date(now.getFullYear(), now.getMonth() + 6, 0).getTime();
-    const totalMs = end - start;
-
-    const months = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
-      return {
-        label: d.toLocaleString('default', { month: 'short' }),
-        position: (d.getTime() - start) / totalMs,
-      };
-    }).filter((m) => m.position < 1);
-
-    // One tick per month at the 15th (halfway through each month)
-    const midMonths: number[] = [];
-    for (let i = 0; i < 6; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() + i + 1, 15);
-      const pos = (d.getTime() - start) / totalMs;
-      if (pos > 0 && pos < 1) midMonths.push(pos);
-    }
-
-    return { monthMarkers: months, weekTicks: midMonths, timelineStart: start, timelineTotalMs: totalMs };
-  }, []);
-
-  const dateToPosition = (dateMs: number) =>
-    (dateMs - timelineStart) / timelineTotalMs;
+  const scale = useMemo(() => buildTimelineScale(range, new Date()), [range]);
+  const timelineStart = scale.start;
+  const timelineTotalMs = scale.end - scale.start;
+  const { visible, later } = useMemo(() => partitionGoals(projects, scale), [projects, scale]);
 
   const formatDate = (dateMs: number) =>
     new Date(dateMs).toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -109,11 +113,12 @@ export default function HillTimeline({
 
   // Assign each name label to a vertical lane so overlapping labels stack up
   // instead of colliding. Horizontal positions are lane-independent, so a single
-  // measure pass is stable.
-  const posKey = projects.map((p) => `${p.id}:${p.date}`).join('|');
+  // measure pass is stable. Labels are numbers while the legend is open, so
+  // their widths change with it.
+  const posKey = `${range}|${showLegend}|` + visible.map((p) => `${p.id}:${p.date}:${p.name}`).join('|');
   useLayoutEffect(() => {
     const compute = () => {
-      const items = projects
+      const items = visible
         .map((p) => {
           const el = labelRefs.current[p.id];
           if (!el) return null;
@@ -227,10 +232,10 @@ export default function HillTimeline({
   }, [tooltipId]);
 
   const handleAddProject = useCallback(() => {
-    const id = onAddProject();
+    const id = onAddProject(defaultGoalDate(scale, Date.now()));
     setTooltipId(id);
     setEditingName('New goal');
-  }, [onAddProject]);
+  }, [onAddProject, scale]);
 
   return (
     <div className="bg-bg-default border border-border-muted rounded-lg px-4 pt-2 pb-3 mb-2">
@@ -258,7 +263,8 @@ export default function HillTimeline({
         {/* Timeline track */}
         <div
           ref={containerRef}
-          style={{ position: 'relative', flex: 1, height: '100%' }}
+          // Leave room past the end of the line for the "+N later" count.
+          style={{ position: 'relative', flex: 1, height: '100%', marginRight: later.length > 0 ? '56px' : 0 }}
         >
           {/* Horizontal line */}
           <div style={{
@@ -281,8 +287,8 @@ export default function HillTimeline({
             borderRadius: '1px',
           }} />
 
-          {/* Weekly ticks */}
-          {weekTicks.map((pos) => (
+          {/* Minor ticks */}
+          {scale.ticks.map((pos) => (
             <div
               key={pos}
               style={{
@@ -297,10 +303,10 @@ export default function HillTimeline({
             />
           ))}
 
-          {/* Month markers */}
-          {monthMarkers.map((m) => (
+          {/* Labelled markers: months, or Mondays in the 30-day view */}
+          {scale.markers.map((m) => (
             <div
-              key={m.label}
+              key={m.time}
               style={{
                 position: 'absolute',
                 left: `${m.position * 100}%`,
@@ -318,10 +324,35 @@ export default function HillTimeline({
             </div>
           ))}
 
+          {/* Goals dated after the window: a count just past the end of the line */}
+          {later.length > 0 && (
+            <div
+              title={later.map((p) => `${formatDate(p.date)} · ${p.name || 'Untitled goal'}`).join('\n')}
+              style={{
+                position: 'absolute',
+                left: '100%',
+                marginLeft: '6px',
+                top: '53px',
+                height: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                fontSize: '10px',
+                color: 'var(--fg-muted)',
+                whiteSpace: 'nowrap',
+                userSelect: 'none',
+              }}
+            >
+              +{later.length} later &rarr;
+            </div>
+          )}
+
           {/* Project dots */}
-          {projects.map((project) => {
-            const showHoverLabel = (hoveredId === project.id || draggingId === project.id) && tooltipId !== project.id;
-            const visualPos = Math.max(0, Math.min(1, dateToPosition(project.date)));
+          {visible.map((project, index) => {
+            // With the legend open, its highlighted row already shows the date
+            // on hover; keep the floating date for drags only.
+            const showHoverLabel =
+              (draggingId === project.id || (hoveredId === project.id && !showLegend)) && tooltipId !== project.id;
+            const visualPos = positionOf(scale, project.date);
             const lane = lanes[project.id] ?? 0;
             return (
               <div
@@ -348,7 +379,8 @@ export default function HillTimeline({
                 }} />
 
                 {/* Name label — always visible; stacks up a lane when it would
-                    collide with a neighbouring label */}
+                    collide with a neighbouring label. With the legend open it
+                    is the goal's number in the legend instead. */}
                 <div
                   ref={(el) => { labelRefs.current[project.id] = el; }}
                   style={{
@@ -367,8 +399,15 @@ export default function HillTimeline({
                       {formatDate(project.date)}
                     </div>
                   )}
-                  <div style={{ fontSize: '10px', color: 'var(--fg-default)', lineHeight: 1.4, userSelect: 'none' }}>
-                    {project.name}
+                  <div style={{
+                    fontSize: '10px',
+                    color: 'var(--fg-default)',
+                    lineHeight: 1.4,
+                    userSelect: 'none',
+                    fontWeight: showLegend ? 600 : undefined,
+                    fontVariantNumeric: showLegend ? 'tabular-nums' : undefined,
+                  }}>
+                    {showLegend ? index + 1 : project.name}
                   </div>
                 </div>
 
@@ -386,6 +425,8 @@ export default function HillTimeline({
                     cursor: draggingId === project.id ? 'grabbing' : 'grab',
                     outline: tooltipId === project.id ? `2px solid ${project.color}` : undefined,
                     outlineOffset: '1px',
+                    transform: hoveredId === project.id ? 'scale(1.25)' : undefined,
+                    transition: 'transform 100ms',
                   }}
                 />
 
@@ -424,6 +465,8 @@ export default function HillTimeline({
                     <input
                       ref={nameInputRef}
                       value={editingName}
+                      maxLength={GOAL_NAME_MAX_LENGTH}
+                      aria-label="Goal name"
                       onChange={(e) => setEditingName(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') { commitTooltipName(); setTooltipId(null); }
@@ -440,9 +483,20 @@ export default function HillTimeline({
                         backgroundColor: 'var(--bg-muted)',
                         color: 'var(--fg-default)',
                         outline: 'none',
-                        marginBottom: '8px',
+                        marginBottom: editingName.length >= NAME_COUNT_FROM ? '2px' : '8px',
                       }}
                     />
+                    {editingName.length >= NAME_COUNT_FROM && (
+                      <div style={{
+                        fontSize: '10px',
+                        textAlign: 'right',
+                        marginBottom: '6px',
+                        fontVariantNumeric: 'tabular-nums',
+                        color: editingName.length >= GOAL_NAME_MAX_LENGTH ? 'var(--fg-danger)' : 'var(--fg-muted)',
+                      }}>
+                        {editingName.length}/{GOAL_NAME_MAX_LENGTH}
+                      </div>
+                    )}
                     {/* Color swatches */}
                     <div style={{
                       display: 'grid',
@@ -498,24 +552,83 @@ export default function HillTimeline({
           })}
         </div>
 
-        {/* Add project button */}
-        <button
-          onClick={handleAddProject}
-          style={{
-            fontSize: '11px',
-            color: 'var(--fg-muted)',
-            border: '1px solid var(--border-muted)',
-            borderRadius: '4px',
-            padding: '3px 8px',
-            background: 'var(--bg-default)',
-            cursor: 'pointer',
-            flexShrink: 0,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          + Goal
-        </button>
+        {/* View controls (top right), with the add button below them */}
+        <div className="flex flex-col items-end gap-2 self-start shrink-0">
+          <div className="flex items-center gap-1.5">
+            <div role="group" aria-label="Timeline range" className="flex bg-bg-muted rounded-md p-0.5 border border-border-muted">
+              {TIMELINE_RANGES.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRange(r)}
+                  aria-pressed={range === r}
+                  className={`px-2 py-0.5 text-[11px] font-medium rounded-sm border-none cursor-pointer transition-colors ${range === r ? 'bg-bg-default text-fg-default shadow-sm' : 'bg-transparent text-fg-muted hover:text-fg-default'}`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowLegend((v) => !v)}
+              aria-pressed={showLegend}
+              title={showLegend ? 'Hide legend' : 'List goals below the timeline'}
+              className={`flex items-center gap-1 px-2 py-[3px] text-[11px] font-medium rounded-md border cursor-pointer transition-colors ${showLegend ? 'border-border-accent bg-bg-accent-subtle text-fg-accent' : 'border-border-muted bg-bg-default text-fg-muted hover:text-fg-default'}`}
+            >
+              <LegendIcon />
+              Legend
+            </button>
+          </div>
+
+          <button
+            onClick={handleAddProject}
+            style={{
+              fontSize: '11px',
+              color: 'var(--fg-muted)',
+              border: '1px solid var(--border-muted)',
+              borderRadius: '4px',
+              padding: '3px 8px',
+              background: 'var(--bg-default)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            + Goal
+          </button>
+        </div>
       </div>
+
+      {/* Legend: every goal in view, in date order, numbered to match the track */}
+      {showLegend && (
+        <div className="border-t border-border-muted mt-1 pt-2">
+          {visible.length === 0 ? (
+            <div className="text-[12px] text-fg-muted py-1 select-none">No goals in this view.</div>
+          ) : (
+            <ol aria-label="Goals" className="grid grid-cols-[auto_auto_auto_1fr] gap-x-2.5 list-none m-0 p-0">
+              {visible.map((project, index) => (
+                <li
+                  key={project.id}
+                  onMouseEnter={() => setHoveredId(project.id)}
+                  onMouseLeave={() => setHoveredId((prev) => prev === project.id ? null : prev)}
+                  className={`col-span-4 grid grid-cols-subgrid items-baseline px-1.5 py-1 rounded-sm text-[12px] ${hoveredId === project.id ? 'bg-bg-muted' : ''}`}
+                >
+                  <span className="text-fg-muted font-semibold tabular-nums text-right">{index + 1}</span>
+                  <span
+                    aria-hidden
+                    className="w-2.5 h-2.5 rounded-full self-center"
+                    style={{ backgroundColor: project.color }}
+                  />
+                  <span className="text-fg-muted tabular-nums whitespace-nowrap">{formatDate(project.date)}</span>
+                  <span className="text-fg-default min-w-0 break-words">{project.name || 'Untitled goal'}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+          {later.length > 0 && (
+            <div className="text-[11px] text-fg-muted px-1.5 pt-1 select-none">
+              +{later.length} more after {formatDate(scale.end - 1)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
